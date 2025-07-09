@@ -18,6 +18,7 @@ class Node:
         self.active = True
         self.node_type='unprocessed' # One of: focusnode, child, sibling, leaf, fork, junction
         self.fork_parent=None
+        self.processed = False
 
         # Basis storage
         self.lp_basis=None

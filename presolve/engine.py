@@ -19,15 +19,13 @@ class PresolveEngine:
         while changed and round_count < max_rounds:
             changed = False
             round_count += 1
-            print(f"Presolve Round {round_count}")
+            # print(f"Presolve Round {round_count}")
             for presolver in self.presolvers:
                 reductions = presolver.apply(self.instance)
                 if reductions:
-                    print(f"  {presolver.name}: {len(reductions)} reductions")
+                    # print(f"  {presolver.name}: {len(reductions)} reductions")
                     self._apply_reductions(reductions)
                     changed = True
-            if not changed:
-                print("  No more applicable reductions.")
 
 
     def _apply_reductions(self, reductions: List[Reduction]):
@@ -45,7 +43,7 @@ class PresolveEngine:
                     if new_lb > old_lb + 1e-8 or new_ub < old_ub - 1e-8:
                         self.instance.lb[idx] = max(old_lb, new_lb)
                         self.instance.ub[idx] = min(old_ub, new_ub)
-                        print(f"    Tightened bounds for {vname}: [{old_lb}, {old_ub}] → [{self.instance.lb[idx]}, {self.instance.ub[idx]}]")
+                        # print(f"    Tightened bounds for {vname}: [{old_lb}, {old_ub}] → [{self.instance.lb[idx]}, {self.instance.ub[idx]}]")
                         self.applied_reductions.append(r)
                 except ValueError:
                     print(f"    Failed to tighten bounds for {vname}: not found")
@@ -57,7 +55,7 @@ class PresolveEngine:
                     row_idx = self.instance.row_names.index(row_name)
                     col_idx = self.instance.var_names.index(var_name)
                     self.instance.A[row_idx, col_idx] = new
-                    print(f"    Tightened coefficient in {row_name} for {var_name}: {old} → {new}")
+                    # print(f"    Tightened coefficient in {row_name} for {var_name}: {old} → {new}")
                     self.applied_reductions.append(r)
                 except ValueError:
                     print(f"    Skipped tightening: row {row_name} or variable {var_name} no longer exists")
@@ -71,7 +69,7 @@ class PresolveEngine:
                     self.instance.b=np.delete(self.instance.b,idx)
                     self.instance.sense=np.delete(self.instance.sense,idx)
                     self.instance.row_names.pop(idx)
-                    print(f"    Removed empty constraint {cname}")
+                    # print(f"    Removed empty constraint {cname}")
                     self.applied_reductions.append(r)
                 except Exception as e:
                     print(f"Failed to remove empty constraint {cname}: {e}")
@@ -85,7 +83,7 @@ class PresolveEngine:
                     self.instance.ub=np.delete(self.instance.ub,idx)
                     del self.instance.var_names[idx]
                     del self.instance.var_types[idx]
-                    print(f"    Removed variable {vname}")
+                    # print(f"    Removed variable {vname}")
                     self.applied_reductions.append(r)
                 except ValueError:
                     print(f"    Failed to remove variable {vname}: not found")
@@ -108,21 +106,21 @@ class PresolveEngine:
                     self.instance.ub=np.delete(self.instance.ub,idx)
                     del self.instance.var_names[idx]
                     del self.instance.var_types[idx]
-                    print(f"    Fixed variable {r.target} = {value} and elimiated it")
+                    # print(f"    Fixed variable {r.target} = {value} and elimiated it")
                     self.applied_reductions.append(r)
                 except ValueError:
                     print(f"    Failed to fix variable {vname}: not found")
             elif r.kind=='substitute_variable':
                 const_term,expr_terms=r.value
                 target=r.target
-                print(f"    Substituting variable {target}={const_term} + "+"+".join([f"{c}*{v}" for c,v in expr_terms]))
+                # print(f"    Substituting variable {target}={const_term} + "+"+".join([f"{c}*{v}" for c,v in expr_terms]))
                 self.instance.apply_substitution_expr(target,const_term,expr_terms)
                 self.applied_reductions.append(r)
 
 
-
-    def summary(self):
-        print("Presolve complete. Reductions applied:")
-        counter=Counter(r.kind for r in self.applied_reductions)
-        for kind,count in counter.items():
-            print(f"{kind}: {count}")
+    #
+    # def summary(self):
+    #     print("Presolve complete. Reductions applied:")
+    #     counter=Counter(r.kind for r in self.applied_reductions)
+    #     for kind,count in counter.items():
+    #         print(f"{kind}: {count}")

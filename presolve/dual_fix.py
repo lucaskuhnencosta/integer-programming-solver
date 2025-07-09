@@ -56,5 +56,5 @@ class DualFix(Presolver):
                         cname=row_names[i]
                         reductions.append(Reduction('remove_constraint', cname, None))
 
-        print(f"    DualFix complete: {len(reductions)} reductions")
+        # print(f"    DualFix complete: {len(reductions)} reductions")
         return reductions

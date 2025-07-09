@@ -16,4 +16,4 @@ class ModelCanonicalizer:
                 A[i,:] *=-1
                 b[i]*=-1
                 sense[i]='L'
-                print(f"    Flipped constraint {row_names[i]} from ≥ to ≤")
+                # print(f"    Flipped constraint {row_names[i]} from ≥ to ≤")

@@ -15,8 +15,8 @@ class MIPInstance:
         self.model.read(mps_path)
 
         # Attributes to be populated
-        self.num_vars = 0
-        self.num_constraints = 0
+        # self.num_vars = 0
+        # self.num_constraints = 0
         self.obj = []
         self.A = None  # Constraint matrix
         self.b = []
@@ -32,6 +32,27 @@ class MIPInstance:
         # Extract all necessary data
         self._extract_data()
 
+    @property
+    def num_vars(self) -> int:
+        return len(self.var_names)
+
+    @property
+    def num_constraints(self) -> int:
+        return len(self.row_names)
+
+    @property
+    def num_binary(self) -> int:
+        return self.var_types.count('B')
+
+    @property
+    def num_integer(self) -> int:
+        return self.var_types.count('I')
+
+    @property
+    def num_continuous(self) -> int:
+        return self.var_types.count('C')
+
+
     def _extract_data(self):
         ### Objective ###
         self.obj = self.model.objective.get_linear()
@@ -40,25 +61,22 @@ class MIPInstance:
         self.var_types = self.model.variables.get_types()
         self.lb = self.model.variables.get_lower_bounds()
         self.ub = self.model.variables.get_upper_bounds()
-        self.num_vars = self.model.variables.get_num()
         self.var_names = self.model.variables.get_names()
         self._clean_variable_names()
 
-        self.num_binary = sum(1 for t in self.var_types if t == 'B')
-        self.num_integer = sum(1 for t in self.var_types if t == 'I')
-        self.num_continuous = sum(1 for t in self.var_types if t == 'C')
 
         # Map CPLEX variable indices to our internal dense index
         self.var_index_map = {name: idx for idx, name in enumerate(self.var_names)}
         self.reverse_var_index = {v: k for k, v in self.var_index_map.items()}
 
         ### Constraints number###
-        self.num_constraints = self.model.linear_constraints.get_num()
+        # self.num_constraints = self.model.linear_constraints.get_num()
+        self.row_names = self.model.linear_constraints.get_names()
         lin_expr = self.model.linear_constraints.get_rows()
         self.A = self._build_constraint_matrix(lin_expr)
         self.sense = self.model.linear_constraints.get_senses()
         self.b = self.model.linear_constraints.get_rhs()
-        self.row_names=self.model.linear_constraints.get_names()
+
 
 
 
@@ -225,8 +243,8 @@ class MIPInstance:
         del self.var_names[idx_target]
         del self.var_types[idx_target]
 
-        print(f"    Substituted {target_var} → {const_term} + " +
-              " + ".join([f"{c}*{v}" for c, v in expr_terms]))
+        # print(f"    Substituted {target_var} → {const_term} + " +
+        #       " + ".join([f"{c}*{v}" for c, v in expr_terms]))
 
 
 
