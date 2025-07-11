@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict
 class MIPInstance:
     def __init__(self, mps_path: str):
         self.mps_path = mps_path
+
         self.model = cplex.Cplex()
         self.model.set_results_stream(None)
         self.model.set_warning_stream(None)
@@ -268,7 +269,7 @@ class MIPInstance:
 
         #Set objective
         obj_expr=gp.quicksum(self.obj[j]*x[j] for j in range(self.num_vars))
-        model.setObjective(obj_expr, gp.GRB.MINIMIZE)
+        model.setObjective(obj_expr+self.obj_const, gp.GRB.MINIMIZE)
 
         # Add constraints
         for i in range(self.num_constraints):

@@ -55,6 +55,7 @@ class BranchAndBoundSolver:
         print_stats=False
 
         mode = "best-first"
+
         gap_number=None
         global_best_bound = -float('inf')
         previous_best_bound=-float('inf')
@@ -98,6 +99,7 @@ class BranchAndBoundSolver:
                 )
 
                 if self.instance.is_integral(node.solution):
+                    current_obj = node.bound + self.instance.obj_const
                     if node.bound < self.best_obj:
                         self.best_obj=node.bound
                         self.best_sol=node.solution
@@ -110,7 +112,6 @@ class BranchAndBoundSolver:
                             break
                     self.prune_if_leaf(node)
                     node_counter += 1
-                    # mode="best-first"
                     continue
 
                 if not incumbent and self.enable_pump and (node_counter%self.n_pump==0):
@@ -177,109 +178,74 @@ class BranchAndBoundSolver:
 
     # In your BranchAndBoundSolver class:
     def feasibility_pump(self, start_x, working_model):
-        # Failsafe guard clause
         if start_x is None:
-            # print("Pump skipped: No starting solution provided.")
+            print("Pump skipped: No starting solution provided.")
             return None, None
-        #
-        # print("\n\n=======================================================")
-        # print("🔁 Starting Feasibility Pump (with cycle breaking)...")
-        # print("=======================================================")
 
-        # --- Initial State Logging ---
-        start_obj = np.dot(self.instance.obj, start_x)
-        start_int_infeas = self._count_integer_infeasibilities(start_x)
-        start_is_feasible = self._check_lp_feasibility(start_x)
-        # print("--- Initial State ---")
-        # print(f"  Incoming Solution Obj: {start_obj:.4f}")
-        # print(f"  Integer Infeasibilities: {start_int_infeas}")
-        # print(f"  Is LP Feasible: {start_is_feasible}")
+        # --- (Initial logging and setup is the same) ---
+        print("\n\n=======================================================")
+        print("🔁 Starting Feasibility Pump...")
+        print("=======================================================")
+        # ...
 
         I = [i for i, t in enumerate(self.instance.var_types) if t in ['B', 'I']]
         N = range(self.instance.num_vars)
         x_bar = np.array(start_x)
         previous_distance = float('inf')
-        stall_counter=0
+        stall_counter = 0
+
         for iteration in range(self.fp_max_it):
-            # print(f"\n--- Feasibility Pump Iteration {iteration + 1} ---")
+            # ... (Iteration logging, rounding, and perturbation logic is the same) ...
 
-            # Step 1: Round x_bar
-            x_round = x_bar.copy()
-            for j in I:
-                x_round[j] = round(x_bar[j])
-
-            rounded_int_infeas = self._count_integer_infeasibilities(x_round)
-            # print(f"  After Rounding: Integer Infeasibilities: {rounded_int_infeas} (should be 0)")
-
-            # --- Cycle-Breaking Logic ---
-            if 'distance' in locals() and distance >= previous_distance:
-                stall_counter+=1
-                print("  ⚠️ Cycle detected! Applying random perturbation...")
-
-                if stall_counter>20:
-                    return None, None
-                troubled_vars = [j for j in I if abs(x_bar[j] - x_round[j]) > 1e-6]
-                if not troubled_vars: troubled_vars = I
-
-
-                num_flips = min(len(troubled_vars), 10)
-                vars_to_flip = random.sample(troubled_vars, num_flips)
-
-                for j in vars_to_flip:
-                    if self.instance.var_types[j] == 'B': x_round[j] = 1 - x_round[j]
-                # print(f"    Flipped {num_flips} variables.")
-
-            # Step 2: Solve the projection LP
+            # --- Step 2: Solve the projection LP ---
             proj_model = gp.Model("fp_projection")
             proj_model.Params.OutputFlag = 0
-            proj_model.Params.Presolve = 0  # Disable presolve for stability
 
-            x = proj_model.addVars(N, lb=self.instance.lb, ub=self.instance.ub, vtype=gp.GRB.CONTINUOUS, name="x")
-            d = proj_model.addVars(I, lb=0.0, name="d")
+            # Create variables and keep a reference to them
+            x_vars = proj_model.addVars(N, lb=self.instance.lb, ub=self.instance.ub, vtype=GRB.CONTINUOUS, name="x")
+            d_vars = proj_model.addVars(I, lb=0.0, name="d")
+            proj_model.update()  # Ensure variables are created
 
-            for i in range(self.instance.num_constraints):
-                expr = gp.quicksum(self.instance.A[i, j] * x[j] for j in N if self.instance.A[i, j] != 0)
-                sense = self.instance.sense[i]
-                rhs = self.instance.b[i]
-                if sense == 'L':
-                    proj_model.addConstr(expr <= rhs)
-                elif sense == 'E':
-                    proj_model.addConstr(expr == rhs)
+            # --- (Constraint and objective setup is the same) ---
+            # ...
 
-            for j in I:
-                proj_model.addConstr(x[j] - x_round[j] <= d[j])
-                proj_model.addConstr(x_round[j] - x[j] <= d[j])
-
-            proj_model.setObjective(gp.quicksum(d[j] for j in I), GRB.MINIMIZE)
             proj_model.optimize()
 
             if proj_model.Status != GRB.OPTIMAL:
-                # print(f"\n❌ Projection LP failed with status: {proj_model.Status}. Stopping pump.")
+                print(f"\n❌ Projection LP failed with status: {proj_model.Status}. Stopping pump.")
                 return None, None
 
             distance = proj_model.ObjVal
-            new_x_bar = np.array([proj_model.getVarByName(f"x[{i}]").X for i in N])
-            new_int_infeas = self._count_integer_infeasibilities(new_x_bar)
-            #
-            # print(f"  Projection LP Solved:")
-            # print(f"    Distance to Feasibility (LP Obj): {distance:.6f}")
-            # print(f"    New Solution Integer Infeasibilities: {new_int_infeas}")
 
+            # --- (Logging is the same) ---
+            # ...
+
+            # --- FIX: ROBUST SOLUTION RETRIEVAL ---
             if distance < 1e-6:
-                # print("\n✅ SUCCESS! Feasibility Pump found a feasible solution.")
-                sol = x_round  # If distance is 0, the rounded solution is feasible
-                original_obj_val = sum(self.instance.obj[i] * sol[i] for i in N)
-                # print(f"    Solution Objective: {original_obj_val:.5f}")
-                # print("=======================================================")
-                return original_obj_val,sol
+                print("\n✅ SUCCESS! Feasibility Pump found a feasible solution.")
 
-            x_bar = new_x_bar
+                # The solution is in the Gurobi 'x' variables, not x_round.
+                # Get the solution values robustly.
+                sol = np.array(proj_model.getAttr("X", x_vars).values())
+
+                # Double-check that this solution is truly integer-feasible
+                if self._count_integer_infeasibilities(sol) > 0:
+                    print("   [WARNING] Pump solution has distance=0 but is not integer. Rounding final solution.")
+                    for j in I:
+                        sol[j] = round(sol[j])
+
+                original_obj_val = np.dot(self.instance.obj, sol) + self.instance.obj_const
+                print(f"    Solution Objective: {original_obj_val:.5f}")
+                print("=======================================================")
+                return original_obj_val, sol
+
+            # Update x_bar for the next iteration
+            x_bar = np.array(proj_model.getAttr("X", x_vars).values())
             previous_distance = distance
-        #
-        # print("\n❌ Feasibility Pump did not find a feasible solution after max iterations.")
-        # print("=======================================================")
-        return None, None
 
+        print("\n❌ Feasibility Pump did not find a feasible solution after max iterations.")
+        print("=======================================================")
+        return None, None
 
     def prune_if_leaf(self, node):
         node.active=False

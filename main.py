@@ -1,4 +1,5 @@
 import time
+import argparse
 import os
 from collections import Counter
 
@@ -42,9 +43,9 @@ def run_solver(instance: MIPInstance):
     #Configure your solver here as needed
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=True,
-                                  k_plunging=11,
-                                  enable_pump=True,
-                                  n_pump=1,
+                                  k_plunging=100,
+                                  enable_pump=False,
+                                  n_pump=5,
                                   fp_max_it=100
     )
 
@@ -95,7 +96,7 @@ def get_stats(instance: MIPInstance)->dict:
 def main():
     # 1. SET-UP
     #Path to the .mps file
-    instance_name="instance_0017.mps"
+    instance_name="instance_0012.mps"
     instance_path = os.path.join("Test_instances", instance_name)  # Adjust directory if needed
 
     # 2. LOAD
@@ -122,7 +123,7 @@ def main():
     if solution is None:
         print("\n❌ No feasible solution found.")
     else:
-        print("\n✅ Optimal solution found!")
+        # print("\n✅ Optimal solution found!")
         print(f"Objective value: {obj_value:.6f}")
 
 if __name__ == "__main__":
