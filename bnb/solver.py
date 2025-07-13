@@ -29,6 +29,16 @@ class BranchAndBoundSolver:
         self.best_obj=float("inf")
         self.best_sol=None
 
+        self.max_processed_depth=0
+        self.plunge_steps_done=0
+
+        self.pump_model = None
+        self.pump_x_vars = None
+        self.pump_d_vars = None
+        self.pump_dist_constrs_le = None
+        self.pump_dist_constrs_ge = None
+        self.I = [i for i, t in enumerate(self.instance.var_types) if t in ['B', 'I']]
+
     def solve(self):
         start_total_solver_time = time.time()
 
@@ -55,6 +65,8 @@ class BranchAndBoundSolver:
         print_stats=False
 
         mode = "best-first"
+        self.max_processed_depth=0
+        self.plunge_steps_done=0
 
         gap_number=None
         global_best_bound = -float('inf')
@@ -71,12 +83,14 @@ class BranchAndBoundSolver:
         try:
             while not tree.empty():
                 current_tree_best_bound = tree.get_best_bound()
+
                 if mode == "dfs":
-                    node=tree.pop_dfs() #LIFO
-                    if node is None: #DFS path is exhausted
+                    node=tree.pop_dfs()
+                    if node is None:
                         mode="best-first"
                         continue
-                else: #best-first
+
+                else:
                     node=tree.pop_best_bound()
                     if node is None:
                         break
@@ -99,7 +113,6 @@ class BranchAndBoundSolver:
                 )
 
                 if self.instance.is_integral(node.solution):
-                    current_obj = node.bound + self.instance.obj_const
                     if node.bound < self.best_obj:
                         self.best_obj=node.bound
                         self.best_sol=node.solution
@@ -117,7 +130,7 @@ class BranchAndBoundSolver:
                 if not incumbent and self.enable_pump and (node_counter%self.n_pump==0):
                     if node.solution is not None:
                         fp_obj,fp_sol=self.feasibility_pump(node.solution, working_model)
-                        if fp_obj is not None and fp_obj<self.best_obj:
+                        if fp_obj is not None:
                             self.best_obj = fp_obj
                             self.best_sol = fp_sol
                             incumbent = self.best_obj
@@ -149,6 +162,30 @@ class BranchAndBoundSolver:
                 node.node_type = 'fork' if node.lp_basis else 'junction'
 
                 tree.push_children(left_node,right_node)
+                self.max_processed_depth = max(self.max_processed_depth, node.depth)
+
+                if mode == "dfs":
+                    self.plunge_steps_done+=1
+                    stop_plunging=False
+                    min_steps=0.1*self.max_processed_depth
+                    max_steps=0.5*self.max_processed_depth
+                    if self.plunge_steps_done < min_steps:
+                        continue
+
+                    if self.plunge_steps_done >= max_steps:
+                        stop_plunging=True
+
+                    if incumbent is not None and global_best_bound > -float('inf'):
+                        denominator=self.best_obj - global_best_bound
+                        if denominator>1e-6:
+                            gamma=(node.bound-global_best_bound)/denominator
+                            if gamma>0.25:
+                                stop_plunging=True
+
+                    if stop_plunging:
+                        mode="best-first"
+                        self.plunge_steps_done=0
+
 
                 if self.enable_plunging and (node_counter>1 and node_counter % self.k_plunging ==0):
                     if mode!="dfs":
@@ -172,80 +209,80 @@ class BranchAndBoundSolver:
 
             return self.best_sol, self.best_obj
 
-    import random  # ⬅️ ADD THIS IMPORT AT THE TOP OF YOUR FILE
-
-    import random  # Make sure this import is at the top of your file
-
-    # In your BranchAndBoundSolver class:
-    def feasibility_pump(self, start_x, working_model):
-        if start_x is None:
-            print("Pump skipped: No starting solution provided.")
-            return None, None
-
-        # --- (Initial logging and setup is the same) ---
-        print("\n\n=======================================================")
-        print("🔁 Starting Feasibility Pump...")
-        print("=======================================================")
-        # ...
-
-        I = [i for i, t in enumerate(self.instance.var_types) if t in ['B', 'I']]
+    # In bnb/solver.py, as a new method in the BranchAndBoundSolver class
+    def _build_pump_model(self):
         N = range(self.instance.num_vars)
+        self.pump_model = gp.Model("fp_projection_reusable")
+        self.pump_model.Params.OutputFlag = 0
+        self.pump_x_vars = self.pump_model.addVars(N, lb=self.instance.lb.tolist(), ub=self.instance.ub.tolist(),name="x")
+        self.pump_d_vars = self.pump_model.addVars(self.I, lb=0.0, name="d")
+        for i in range(self.instance.num_constraints):
+            expr = gp.quicksum(self.instance.A[i, j] * self.pump_x_vars[j] for j in N if self.instance.A[i, j] != 0)
+            sense = self.instance.sense[i]
+            rhs = self.instance.b[i]
+            if sense == 'L':
+                self.pump_model.addConstr(expr <= rhs)
+            elif sense == 'E':
+                self.pump_model.addConstr(expr == rhs)
+
+        self.pump_dist_constrs_le = {j: self.pump_model.addConstr(self.pump_x_vars[j] - self.pump_d_vars[j] <= 0) for j in self.I}
+        self.pump_dist_constrs_ge = {j: self.pump_model.addConstr(self.pump_x_vars[j] + self.pump_d_vars[j] >= 0) for j in self.I}
+        self.pump_model.setObjective(gp.quicksum(self.pump_d_vars[j] for j in self.I), GRB.MINIMIZE)
+
+    def feasibility_pump(self, start_x, working_model):
+        if self.pump_model is None:
+            self._build_pump_model()
+
         x_bar = np.array(start_x)
         previous_distance = float('inf')
         stall_counter = 0
 
         for iteration in range(self.fp_max_it):
-            # ... (Iteration logging, rounding, and perturbation logic is the same) ...
+            try:
+                x_round = np.round(x_bar) # Simplified rounding
 
-            # --- Step 2: Solve the projection LP ---
-            proj_model = gp.Model("fp_projection")
-            proj_model.Params.OutputFlag = 0
+                if self._check_lp_feasibility(x_round):
+                    final_obj = np.dot(self.instance.obj, x_round)
+                    return final_obj, x_round
 
-            # Create variables and keep a reference to them
-            x_vars = proj_model.addVars(N, lb=self.instance.lb, ub=self.instance.ub, vtype=GRB.CONTINUOUS, name="x")
-            d_vars = proj_model.addVars(I, lb=0.0, name="d")
-            proj_model.update()  # Ensure variables are created
+                if iteration > 0 and 'distance' in locals() and distance >= previous_distance:
+                    stall_counter += 1
+                    if stall_counter > 20:
+                        return None, None
+                    troubled_vars = [j for j in self.I if abs(x_bar[j] - x_round[j]) > 1e-6]
+                    if not troubled_vars: troubled_vars = I
+                    num_flips = min(len(troubled_vars), 10)
+                    vars_to_flip = random.sample(troubled_vars, num_flips)
+                    for j in vars_to_flip:
+                        if self.instance.var_types[j] == 'B': x_round[j] = 1 - x_round[j]
+                else:
+                    stall_counter = 0
 
-            # --- (Constraint and objective setup is the same) ---
-            # ...
+                for j in self.pump_dist_constrs_le:
+                    self.pump_dist_constrs_le[j].RHS = x_round[j]
+                    self.pump_dist_constrs_ge[j].RHS = x_round[j]
 
-            proj_model.optimize()
+                self.pump_model.optimize()
 
-            if proj_model.Status != GRB.OPTIMAL:
-                print(f"\n❌ Projection LP failed with status: {proj_model.Status}. Stopping pump.")
+                if self.pump_model.Status != GRB.OPTIMAL: return None, None
+
+                distance = self.pump_model.ObjVal
+                previous_distance = distance
+                x_bar = np.array(list(self.pump_model.getAttr("X", self.pump_x_vars).values()))
+                if distance < 1e-6:
+                    if self._count_integer_infeasibilities(x_bar) == 0:
+                        final_obj = np.dot(self.instance.obj, x_bar)
+                        return final_obj, x_bar
+
+            except Exception as e:
+                print(f"\n\n🚨 EXCEPTION CAUGHT IN FEASIBILITY PUMP 🚨")
+                import traceback
+                traceback.print_exc()
                 return None, None
 
-            distance = proj_model.ObjVal
-
-            # --- (Logging is the same) ---
-            # ...
-
-            # --- FIX: ROBUST SOLUTION RETRIEVAL ---
-            if distance < 1e-6:
-                print("\n✅ SUCCESS! Feasibility Pump found a feasible solution.")
-
-                # The solution is in the Gurobi 'x' variables, not x_round.
-                # Get the solution values robustly.
-                sol = np.array(proj_model.getAttr("X", x_vars).values())
-
-                # Double-check that this solution is truly integer-feasible
-                if self._count_integer_infeasibilities(sol) > 0:
-                    print("   [WARNING] Pump solution has distance=0 but is not integer. Rounding final solution.")
-                    for j in I:
-                        sol[j] = round(sol[j])
-
-                original_obj_val = np.dot(self.instance.obj, sol) + self.instance.obj_const
-                print(f"    Solution Objective: {original_obj_val:.5f}")
-                print("=======================================================")
-                return original_obj_val, sol
-
-            # Update x_bar for the next iteration
-            x_bar = np.array(proj_model.getAttr("X", x_vars).values())
-            previous_distance = distance
-
-        print("\n❌ Feasibility Pump did not find a feasible solution after max iterations.")
-        print("=======================================================")
         return None, None
+
+
 
     def prune_if_leaf(self, node):
         node.active=False

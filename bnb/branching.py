@@ -2,7 +2,7 @@ from bnb.node import Node
 import random
 
 class Branching:
-    def __init__(self, instance,strong_depth=10,k=50):
+    def __init__(self, instance,strong_depth=100,k=1500):
         self.instance = instance #Access to originalbounds, types, etc.
         self.strong_depth = strong_depth
         self.k = k

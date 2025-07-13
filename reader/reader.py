@@ -70,6 +70,15 @@ class MIPInstance:
         self.var_index_map = {name: idx for idx, name in enumerate(self.var_names)}
         self.reverse_var_index = {v: k for k, v in self.var_index_map.items()}
 
+        num_sos = self.model.SOS.get_num()
+        if num_sos > 0:
+            print("\n" + "=" * 60)
+            print(f"⚠️  WARNING: This model contains {num_sos} Special Ordered Set (SOS) constraint(s).")
+            print("   This custom solver does not handle SOS constraints explicitly.")
+            print("   The solution may be incorrect as these constraints will be ignored.")
+            print("=" * 60 + "\n")
+        # --- End of new code ---
+
         ### Constraints number###
         # self.num_constraints = self.model.linear_constraints.get_num()
         self.row_names = self.model.linear_constraints.get_names()
@@ -96,8 +105,8 @@ class MIPInstance:
     def pretty_print(self):
         print(f'This model has originally {self.num_vars} variables and {self.num_constraints} constraints')
         ##########################################################################
-        print("\n=== Objective ===")
-        print("Objective vector:", self.obj)
+        # print("\n=== Objective ===")
+        # print("Objective vector:", self.obj)
 
         ###########################################################################
         print('\n=== Variables ===')
@@ -106,56 +115,56 @@ class MIPInstance:
         print(f"Total integer variables: {self.num_integer}")
         print(f"Total continuous variables: {self.num_continuous}")
 
-        print("Variable types:", self.var_types)
-        print("Variable names:", self.var_names)
-        print("Bounds:")
-        for name, lb, ub in zip(self.var_names, self.lb, self.ub):
-            if abs(lb - ub) < 1e-8:
-                print(f"  {name}: FIXED to {lb}")
-            else:
-                lb_str = str(lb) if lb > -1e20 else "-∞"
-                ub_str = str(ub) if ub < 1e20 else "∞"
-                print(f"  {name}: [{lb_str}, {ub_str}]")
+        # print("Variable types:", self.var_types)
+        # print("Variable names:", self.var_names)
+        # print("Bounds:")
+        # for name, lb, ub in zip(self.var_names, self.lb, self.ub):
+        #     if abs(lb - ub) < 1e-8:
+        #         print(f"  {name}: FIXED to {lb}")
+        #     else:
+        #         lb_str = str(lb) if lb > -1e20 else "-∞"
+        #         ub_str = str(ub) if ub < 1e20 else "∞"
+        #         print(f"  {name}: [{lb_str}, {ub_str}]")
+        #
+        # print("Variable Types:")
+        # for name, vtype in zip(self.var_names, self.var_types):
+        #     typename = {"B": "binary", "I": "integer", "C": "continuous"}.get(vtype, vtype)
+        #     print(f"  {name}: {typename}")
 
-        print("Variable Types:")
-        for name, vtype in zip(self.var_names, self.var_types):
-            typename = {"B": "binary", "I": "integer", "C": "continuous"}.get(vtype, vtype)
-            print(f"  {name}: {typename}")
-
-        ###########################################################################
-        print("\n=== Constraint Matrix (A) ===")
-        print("And therefore the constraint matrix shape is:", self.A.shape)
-        print("Here you can see your full constraint matrix:")
-        print(self.A)
-
-        print("\n=== RHS Vector (b) ===")
-        print(np.array(self.b))
-
-        print("\n=== Senses (L ≤, G ≥, E =) ===")
-        print(self.sense)
-
-        ###########################################################################
-        print("\n So your full problem consists of:")
-        terms = [f"{coef}*{name}" for coef, name in zip(self.obj, self.var_names) if coef != 0]
-        print("minimize")
-        print("  ", " + ".join(terms))
-
-        print("\nsubject to")
-        for i in range(self.num_constraints):
-            row_terms = []
-            for j in range(self.num_vars):
-                coeff = self.A[i, j]
-                if coeff != 0:
-                    row_terms.append(f"{coeff}*{self.var_names[j]}")
-            expr = " + ".join(row_terms)
-            rhs = self.b[i]
-            sense = self.sense[i]
-            if sense == 'L':
-                print(f"  c{i + 1}: {expr} <= {rhs}")
-            elif sense == 'G':
-                print(f"  c{i + 1}: {expr} >= {rhs}")
-            elif sense == 'E':
-                print(f"  c{i + 1}: {expr} = {rhs}")
+        # ###########################################################################
+        # print("\n=== Constraint Matrix (A) ===")
+        # print("And therefore the constraint matrix shape is:", self.A.shape)
+        # print("Here you can see your full constraint matrix:")
+        # print(self.A)
+        #
+        # print("\n=== RHS Vector (b) ===")
+        # print(np.array(self.b))
+        #
+        # print("\n=== Senses (L ≤, G ≥, E =) ===")
+        # print(self.sense)
+        #
+        # ###########################################################################
+        # print("\n So your full problem consists of:")
+        # terms = [f"{coef}*{name}" for coef, name in zip(self.obj, self.var_names) if coef != 0]
+        # print("minimize")
+        # print("  ", " + ".join(terms))
+        #
+        # print("\nsubject to")
+        # for i in range(self.num_constraints):
+        #     row_terms = []
+        #     for j in range(self.num_vars):
+        #         coeff = self.A[i, j]
+        #         if coeff != 0:
+        #             row_terms.append(f"{coeff}*{self.var_names[j]}")
+        #     expr = " + ".join(row_terms)
+        #     rhs = self.b[i]
+        #     sense = self.sense[i]
+        #     if sense == 'L':
+        #         print(f"  c{i + 1}: {expr} <= {rhs}")
+        #     elif sense == 'G':
+        #         print(f"  c{i + 1}: {expr} >= {rhs}")
+        #     elif sense == 'E':
+        #         print(f"  c{i + 1}: {expr} = {rhs}")
 
 
     def rebuild_model(self):
