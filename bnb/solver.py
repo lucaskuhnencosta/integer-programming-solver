@@ -8,12 +8,16 @@ from bnb.branching import Branching
 from bnb.shared_state import SharedState
 from bnb.tree import BranchAndBoundTree
 
+from cutgen.Cliques import *
+from cutgen.graph_builder import *
+
 import gurobipy as gp
 from gurobipy import GRB
 
 class BranchAndBoundSolver:
-    def __init__(self, mip_instance,enable_plunging=False,k_plunging=10,enable_pump=False,n_pump=100,fp_max_it=1000):
+    def __init__(self, mip_instance,enable_plunging=False,k_plunging=10,enable_pump=False,n_pump=100,fp_max_it=1000,clique_cuts=False):
         self.instance = mip_instance
+
         self.shared = SharedState()
 
         self.brancher = Branching(self.instance)
@@ -26,7 +30,7 @@ class BranchAndBoundSolver:
         self.n_pump = n_pump
         self.fp_max_it=fp_max_it
 
-        self.best_obj=float("inf")
+        self.best_obj = float("inf")
         self.best_sol=None
 
         self.max_processed_depth=0
@@ -38,13 +42,39 @@ class BranchAndBoundSolver:
         self.pump_dist_constrs_le = None
         self.pump_dist_constrs_ge = None
         self.I = [i for i, t in enumerate(self.instance.var_types) if t in ['B', 'I']]
+        self.enable_clique_cuts=clique_cuts
 
     def solve(self):
         start_total_solver_time = time.time()
 
+
+        if self.enable_clique_cuts:
+            self.strengthened_cliques = []
+
+            self.instance._complement_all_binary_vars()
+            print("⚙️  Pre-computing cliques for cut generation...")
+
+            # 1a. Extract the binary-only constraints from the instance
+            binary_A, binary_b = self.instance.get_binary_subproblem()
+            print(f"    Found {len(binary_A)} binary-only constraints for analysis.")
+
+            # 1b. Detect initial "seed" cliques from these constraints
+            seed_cliques = clique_detection(binary_A, binary_b)
+            print(f"    Detected {len(seed_cliques)} seed cliques.")
+
+            # 1c. Build the conflict graph from the cliques
+            conflict_graph = graph_builder(seed_cliques)
+            print(
+                f"    Built conflict graph with {conflict_graph.number_of_nodes()} nodes and {conflict_graph.number_of_edges()} edges.")
+
+            # 1d. Extend the cliques to make them stronger
+            self.strengthened_cliques = clique_extension(conflict_graph, seed_cliques)
+            print(f"    Extended to {len(self.strengthened_cliques)} maximal cliques.")
+
         self.instance.build_root_model() #We will log here
         working_model = self.instance.root_lp_model.copy()
         working_model.setParam("OutputFlag", 0)
+
         root=Node(parent=None,depth=0,bound_changes={})
         start_time = time.time()
         root.evaluate_lp(working_model, self.instance)
@@ -57,10 +87,29 @@ class BranchAndBoundSolver:
 
         print("\nRoot relaxation: objective %.8f, time %.2f seconds\n" % (root.bound, elapsed_time))
 
+        if self.enable_clique_cuts:
+            for i in range(10):
+                num_new_cuts=self._separate_clique_cuts(root,working_model)
+                if num_new_cuts>0:
+                    root.evaluate_lp(working_model, self.instance)
+                else:
+                    break
+
+        print("\nRoot relaxation: objective %.8f, time %.2f seconds\n" % (root.bound, elapsed_time))
+
         tree = BranchAndBoundTree()
         active_mgr = ActivePathManager(root,self.instance)
-        tree.push(root)
-        node_counter = 1
+
+        branch_var, left_node, right_node = self.brancher.select_branching_variable(root, root.solution, working_model,active_mgr,clique_cuts=self.enable_clique_cuts)
+
+        if branch_var is None:
+            print("✅ Root node is optimal or infeasible after cuts.")
+            # ... handle this case ...
+            return root.solution, root.bound + self.instance.obj_const
+
+        tree.push_children(left_node, right_node)
+
+        node_counter = 0
         incumbent = None
         print_stats=False
 
@@ -82,17 +131,22 @@ class BranchAndBoundSolver:
 
         try:
             while not tree.empty():
+                # print("We are here")
                 current_tree_best_bound = tree.get_best_bound()
 
                 if mode == "dfs":
                     node=tree.pop_dfs()
+                    # print("We are here in dfs mode")
                     if node is None:
                         mode="best-first"
+                        # print("The node is None")
                         continue
 
                 else:
                     node=tree.pop_best_bound()
+                    # print("We are here in best first mode popping a node")
                     if node is None:
+                        # print("The node is None")
                         break
 
                 node_counter += 1
@@ -101,11 +155,23 @@ class BranchAndBoundSolver:
                 node.evaluate_lp(working_model,self.instance)
                 elapsed_time=time.time() - start_time
 
+                if self.enable_clique_cuts:
+                    num_new_cuts = self._separate_clique_cuts(node, working_model)
+                    # If we added cuts, we must re-solve the LP to get a new, tighter bound
+                    if num_new_cuts > 0:
+                        node.evaluate_lp(working_model, self.instance)
+
                 unexplored = len(tree)
 
-                if node.is_infeasible or node.bound >= self.best_obj:
+                if node.is_infeasible:
                     self.prune_if_leaf(node)
                     continue
+
+
+                if node.bound>=self.best_obj:
+                    self.prune_if_leaf(node)
+                    continue
+
 
                 int_infeas = sum(
                     1 for i, v in enumerate(node.solution or [])
@@ -151,7 +217,7 @@ class BranchAndBoundSolver:
                 # Select branching variable using strong branching (or other strategy)
 
                 branch_start = time.time()
-                branch_var, left_node, right_node = self.brancher.select_branching_variable(node,node.solution,working_model,active_mgr)
+                branch_var, left_node, right_node = self.brancher.select_branching_variable(node,node.solution,working_model,active_mgr,clique_cuts=self.enable_clique_cuts)
                 branch_end = time.time()
                 branching_times.append(branch_end - branch_start)
                 if branch_var is None:
@@ -191,6 +257,17 @@ class BranchAndBoundSolver:
                     if mode!="dfs":
                         mode="dfs"
 
+
+
+
+
+        except Exception as e:
+            print("\n\n🚨 EXCEPTION CAUGHT AFTER ADDING CUTS 🚨")
+            import traceback
+            traceback.print_exc()
+            # Re-raise the exception to stop the program
+            raise e
+        # --- END DEBUGGING BLOCK ---
         except KeyboardInterrupt:
             print("\n\n🛑 User interrupt detected! Stopping search.")
             print("Returning best solution found so far.")
@@ -214,7 +291,9 @@ class BranchAndBoundSolver:
         N = range(self.instance.num_vars)
         self.pump_model = gp.Model("fp_projection_reusable")
         self.pump_model.Params.OutputFlag = 0
-        self.pump_x_vars = self.pump_model.addVars(N, lb=self.instance.lb.tolist(), ub=self.instance.ub.tolist(),name="x")
+        # The corrected line
+        self.pump_x_vars = self.pump_model.addVars(N, lb=self.instance.lb, ub=self.instance.ub, name="x")
+        # self.pump_x_vars = self.pump_model.addVars(N, lb=self.instance.lb.tolist(), ub=self.instance.ub.tolist(),name="x")
         self.pump_d_vars = self.pump_model.addVars(self.I, lb=0.0, name="d")
         for i in range(self.instance.num_constraints):
             expr = gp.quicksum(self.instance.A[i, j] * self.pump_x_vars[j] for j in N if self.instance.A[i, j] != 0)
@@ -250,7 +329,7 @@ class BranchAndBoundSolver:
                     if stall_counter > 20:
                         return None, None
                     troubled_vars = [j for j in self.I if abs(x_bar[j] - x_round[j]) > 1e-6]
-                    if not troubled_vars: troubled_vars = I
+                    if not troubled_vars: troubled_vars = self.I
                     num_flips = min(len(troubled_vars), 10)
                     vars_to_flip = random.sample(troubled_vars, num_flips)
                     for j in vars_to_flip:
@@ -282,6 +361,29 @@ class BranchAndBoundSolver:
 
         return None, None
 
+    def _separate_clique_cuts(self,node,working_model):
+        """
+        Finds and adds violated clique cuts for the current node's LP solution.
+        Returns the number of cuts added
+        """
+
+        if not self.strengthened_cliques or node.solution is None:
+            return 0
+
+        cuts_added = 0
+        lp_solution = node.solution
+
+        for clique in self.strengthened_cliques:
+            if sum(lp_solution[j] for j in clique) > 1.0 + 1e-6:
+                vars_in_cut=[working_model.getVarByName(self.instance.var_names[j]) for j in clique]
+                working_model.addConstr(gp.quicksum(vars_in_cut) <= 1)
+
+                cuts_added += 1
+        if cuts_added >0:
+            # print(f"    -> Added {cuts_added} clique cuts to the LP relaxation.")
+            working_model.update()  # Apply changes to the model
+
+        return cuts_added
 
 
     def prune_if_leaf(self, node):

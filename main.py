@@ -31,7 +31,7 @@ def run_presolve(instance: MIPInstance):
     engine.register(CoefficientTightening())
     engine.register(DualFix())
     engine.run()
-    # engine.summary()
+    engine.summary()
     return engine.applied_reductions
 
 
@@ -43,10 +43,11 @@ def run_solver(instance: MIPInstance):
     #Configure your solver here as needed
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=True,
-                                  k_plunging=20,
+                                  k_plunging=10,
                                   enable_pump=True,
                                   n_pump=2,
-                                  fp_max_it=10000
+                                  fp_max_it=20000,
+                                  clique_cuts=True
     )
 
     solution, obj_value = solver.solve()
@@ -115,7 +116,7 @@ def main():
 
     #4. REPORT
     print_summary_comparison(stats_before, stats_after)
-    summarize_reductions(applied_reductions)
+    # summarize_reductions(applied_reductions)
 
     #5. SOLVE
     print("Solving with Branch-and-Bound (solver created by Lucas Kuhnen...)")

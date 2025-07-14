@@ -1,5 +1,4 @@
-from aux import extract_ordered_fractional_map
-from Gurobi_LP_Modeler import build_lp_model
+from cutgen.aux import extract_ordered_fractional_map
 import gurobipy as gp
 
 def clique_detection(A,b):

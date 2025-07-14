@@ -2,7 +2,7 @@ from bnb.node import Node
 import random
 
 class Branching:
-    def __init__(self, instance,strong_depth=100,k=1500):
+    def __init__(self, instance,strong_depth=100,k=1500,clique_cuts=False):
         self.instance = instance #Access to originalbounds, types, etc.
         self.strong_depth = strong_depth
         self.k = k
@@ -23,7 +23,7 @@ class Branching:
         initialized=[]
         uninitialized=[]
 
-        for i in fractional_vars:
+        for i,_ in fractional_vars:
             if self.score[i]>0:
                 initialized.append((self.score[i],i))
             else:
@@ -40,7 +40,7 @@ class Branching:
 
         return selected
 
-    def select_branching_variable(self, node, solution,working_model,active_mgr,strong_k_override=None):
+    def select_branching_variable(self, node, solution,working_model,active_mgr,strong_k_override=None,clique_cuts=False):
         """
         Given a fractional solution from the current LP relaxation (at a node),
         evaluate all fractional integer variables with strong branching.
@@ -48,20 +48,26 @@ class Branching:
         and picking the variable whose branching seems most promising.
         """
         # 1. Identify all fractional variables that must be branched on
-        fractional_vars=[
-            i for i,val in enumerate(solution)
-            if self.instance.var_types[i] in ['B','I'] and abs(val-round(val))>1e-6
-        ]
+        fractional_vars=[]
+        for i, val in enumerate(solution):
+            if self.instance.var_types[i] in ['B', 'I']:
+                if abs(val - round(val)) > 1e-6:
+                    fractional_vars.append((i, val))
 
-        if not fractional_vars:
+        if clique_cuts:
+            original_fractional_vars = [(i, val) for i, val in fractional_vars if i < self.instance.original_num_vars]
+        else:
+            original_fractional_vars = fractional_vars
+
+        if not original_fractional_vars:
             return None
 
         if node.depth<=self.strong_depth:
             self.k=strong_k_override if strong_k_override is not None else self.k
-            selected=self._select_k_strong_candidates(fractional_vars)
+            selected=self._select_k_strong_candidates(original_fractional_vars)
             return self.strong_branching(node,solution,selected,working_model,active_mgr)
         else:
-            return self.pseudocost_branching(node,solution,fractional_vars,working_model,active_mgr)
+            return self.pseudocost_branching(node,solution,original_fractional_vars,working_model,active_mgr)
 
     def strong_branching(self,node,solution,selected_vars,working_model,active_path):
         best_var = None  # The best variable to branch on

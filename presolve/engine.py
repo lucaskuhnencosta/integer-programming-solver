@@ -118,9 +118,8 @@ class PresolveEngine:
                 self.applied_reductions.append(r)
 
 
-    #
-    # def summary(self):
-    #     print("Presolve complete. Reductions applied:")
-    #     counter=Counter(r.kind for r in self.applied_reductions)
-    #     for kind,count in counter.items():
-    #         print(f"{kind}: {count}")
+    def summary(self):
+        print("Presolve complete. Reductions applied:")
+        counter=Counter(r.kind for r in self.applied_reductions)
+        for kind,count in counter.items():
+            print(f"{kind}: {count}")

@@ -8,6 +8,7 @@ class MIPInstance:
     def __init__(self, mps_path: str):
         self.mps_path = mps_path
 
+        self.obj_const=0
         self.model = cplex.Cplex()
         self.model.set_results_stream(None)
         self.model.set_warning_stream(None)
@@ -19,6 +20,7 @@ class MIPInstance:
         # self.num_vars = 0
         # self.num_constraints = 0
         self.obj = []
+        self.sense_obj=-1
         self.A = None  # Constraint matrix
         self.b = []
         self.sense = []
@@ -57,8 +59,21 @@ class MIPInstance:
     def _extract_data(self):
         ### Objective ###
         self.obj = self.model.objective.get_linear()
+        # self.sense_obj = self.model.objective.get_sense()  # <-- ADD THIS
+        # print("\n" + "=" * 50)
+        # print(f"DEBUG: CPLEX read objective sense value as: {self.sense_obj}")
+        # print("(Note: 1 = Minimize, -1 = Maximize)")
+        # print("=" * 50 + "\n")
 
-        ### Variables, their types, bounds, names, and number ###
+        if self.sense_obj == -1:  # -1 signifies maximization
+            print("[INFO] Maximization problem detected. Negating objective function.")
+            self.obj = [-c for c in self.obj]
+            # Also negate the constant, if it ever exists from presolve
+            self.obj_const = -self.obj_const
+            # Now, we can treat it as a minimization problem everywhere else
+            self.sense_obj = 1
+
+            ### Variables, their types, bounds, names, and number ###
         self.var_types = self.model.variables.get_types()
         self.lb = self.model.variables.get_lower_bounds()
         self.ub = self.model.variables.get_upper_bounds()
@@ -304,6 +319,120 @@ class MIPInstance:
                 if abs(solution[i] - round(solution[i])) > tol:
                     return False
         return True
+
+    def _complement_all_binary_vars(self):
+        """
+        For every binary variable x, creates a complement x_comp and adds the
+        linking constraint x + x_comp = 1. It then uses these complements
+        to eliminate all negative coefficients for binary variables in the model.
+        """
+        # print("⚙️  Complementing all binary variables to handle negative coefficients...")
+
+        # 1. Identify all original binary variables
+        original_binary_indices = [i for i, vtype in enumerate(self.var_types) if vtype == 'B']
+        if not original_binary_indices:
+            # print("    No binary variables to complement.")
+            return
+
+        # Store original counts before we start modifying the model
+        self.original_num_vars = self.num_vars
+        self.original_num_constrs = self.num_constraints
+
+        # Create a mapping from original variable index to its new complement's index
+        complement_map = {}
+
+        # 2. Add a new complement variable for each original binary variable
+        for j in original_binary_indices:
+            original_name = self.var_names[j]
+            complement_name = f"{original_name}_comp"
+
+            # Add the new variable's properties
+            self.var_names.append(complement_name)
+            self.var_types.append('B')
+            self.lb = np.append(self.lb, 0.0)
+            self.ub = np.append(self.ub, 1.0)
+            self.obj = np.append(self.obj, 0.0)
+
+            # Add a new column of zeros to the A matrix for the new variable
+            new_col = np.zeros((self.A.shape[0], 1))
+            self.A = np.hstack([self.A, new_col])
+
+            # Store the index of the newly created complement variable
+            complement_map[j] = self.num_vars - 1
+
+        # 3. Add linking constraints (x + x_comp = 1) for all pairs
+        for j in original_binary_indices:
+            link_row = np.zeros((1, self.num_vars))
+            link_row[0, j] = 1.0
+            link_row[0, complement_map[j]] = 1.0
+
+            self.A = np.vstack([self.A, link_row])
+            self.b = np.append(self.b, 1.0)
+            self.sense = np.append(self.sense, 'E')
+            self.row_names = np.append(self.row_names, f"link_{self.var_names[j]}")
+
+        # 4. Perform the substitution: replace `-a*x` with `a*(1 - x_comp)`
+        # This is equivalent to: `a - a*x_comp`
+        for i in range(self.original_num_constrs):
+            for j in original_binary_indices:
+                coeff = self.A[i, j]
+                if coeff < 0:
+                    # The term is -a_ij * x_j. Substitute x_j = 1 - x_j_comp
+                    # The term becomes -a_ij * (1 - x_j_comp) = -a_ij + a_ij * x_j_comp
+
+                    # Add the constant term `-a_ij` to the RHS
+                    self.b[i] -= coeff
+
+                    # Add the new variable term `+a_ij * x_j_comp`
+                    complement_idx = complement_map[j]
+                    self.A[i, complement_idx] += -coeff  # Add the positive coefficient
+
+                    # Remove the original negative term by setting its coefficient to 0
+                    self.A[i, j] = 0.0
+
+        # print(f"    Added {len(original_binary_indices)} complement variables and linking constraints.")
+
+    def get_binary_subproblem(self):
+        """
+        Filters the main problem to find constraints that only involve binary variables,
+        which are candidates for clique detection
+        """
+        binary_indices = {i for i, vtype in enumerate(self.var_types) if vtype == 'B'}
+
+        positive_binary_constraints = []
+        positive_binary_rhs = []
+        total_binary_constraints = 0
+
+        for i in range(self.num_constraints):
+            # Find the indices of all variables with non-zero coefficients in this row
+            vars_in_row = set(np.nonzero(self.A[i, :])[0])
+
+            # If all variables in the constraint are binary, it's a candidate
+            if vars_in_row and vars_in_row.issubset(binary_indices):
+                total_binary_constraints +=1
+                constraint_terms = [(j, self.A[i, j]) for j in vars_in_row]
+
+                if all(coeff > 0 for _, coeff in constraint_terms):
+                    positive_binary_constraints.append(constraint_terms)
+                    positive_binary_rhs.append(self.b[i])
+
+
+        print(f"    Found {total_binary_constraints} constraints involving only binary variables.")
+        print(f"    Filtered down to {len(positive_binary_constraints)} constraints with all-positive coefficients.")
+
+        # Verification step to confirm our logic is correct
+        all_coeffs_are_positive = all(
+            coeff > 0
+            for constraint in positive_binary_constraints
+            for _, coeff in constraint
+        )
+        print(f"    Verification check: All coefficients are positive? -> {all_coeffs_are_positive}")
+        if not all_coeffs_are_positive:
+            print("    [WARNING] Verification failed. A non-positive coefficient was found.")
+
+        return positive_binary_constraints, positive_binary_rhs
+
+
 
 
 
