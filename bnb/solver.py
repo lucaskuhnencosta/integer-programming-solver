@@ -257,16 +257,6 @@ class BranchAndBoundSolver:
                     if mode!="dfs":
                         mode="dfs"
 
-
-
-
-
-        except Exception as e:
-            print("\n\n🚨 EXCEPTION CAUGHT AFTER ADDING CUTS 🚨")
-            import traceback
-            traceback.print_exc()
-            # Re-raise the exception to stop the program
-            raise e
         # --- END DEBUGGING BLOCK ---
         except KeyboardInterrupt:
             print("\n\n🛑 User interrupt detected! Stopping search.")
@@ -354,7 +344,6 @@ class BranchAndBoundSolver:
                         return final_obj, x_bar
 
             except Exception as e:
-                print(f"\n\n🚨 EXCEPTION CAUGHT IN FEASIBILITY PUMP 🚨")
                 import traceback
                 traceback.print_exc()
                 return None, None

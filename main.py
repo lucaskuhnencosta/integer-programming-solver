@@ -113,7 +113,7 @@ def main():
         # summarize_reductions(applied_reductions)
     else:
         print("⏩ Skipping presolve step as requested.")
-    
+
     #5. SOLVE
     print("Solving with Branch-and-Bound (solver created by Lucas Kuhnen...)")
     solver = BranchAndBoundSolver(instance,
