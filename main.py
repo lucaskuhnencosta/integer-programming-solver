@@ -97,7 +97,7 @@ def get_stats(instance: MIPInstance)->dict:
 def main():
     # 1. SET-UP
     #Path to the .mps file
-    instance_name="model_S1_Jc0_Js9_T96.mps"
+    instance_name="model_S1_Jc0_Js10_T96.mps"
     instance_path = os.path.join("Laio_instances", instance_name)  # Adjust directory if needed
 
     # 2. LOAD

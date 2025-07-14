@@ -2,7 +2,7 @@ from bnb.node import Node
 import random
 
 class Branching:
-    def __init__(self, instance,strong_depth=100,k=1500,clique_cuts=False):
+    def __init__(self, instance,strong_depth=10,k=1500,clique_cuts=False):
         self.instance = instance #Access to originalbounds, types, etc.
         self.strong_depth = strong_depth
         self.k = k
@@ -141,7 +141,7 @@ class Branching:
 
         original_focus = active_path.focus  # Save current focus to restore later
 
-        for var_idx in fractional_vars:
+        for var_idx, frac_value in fractional_vars:
             val=solution[var_idx]
             floor_val=int(val)
             ceil_val=floor_val+1

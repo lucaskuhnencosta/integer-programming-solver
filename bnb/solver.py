@@ -155,7 +155,7 @@ class BranchAndBoundSolver:
                 node.evaluate_lp(working_model,self.instance)
                 elapsed_time=time.time() - start_time
 
-                if self.enable_clique_cuts:
+                if self.enable_clique_cuts and node.depth % 5 ==0:
                     num_new_cuts = self._separate_clique_cuts(node, working_model)
                     # If we added cuts, we must re-solve the LP to get a new, tighter bound
                     if num_new_cuts > 0:
