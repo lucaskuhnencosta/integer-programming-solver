@@ -112,6 +112,7 @@ def main():
         print_summary_comparison(stats_before, stats_after)
         # summarize_reductions(applied_reductions)
     else:
+        ModelCanonicalizer().apply(instance)
         print("⏩ Skipping presolve step as requested.")
 
     #5. SOLVE
