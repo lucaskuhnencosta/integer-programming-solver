@@ -2,6 +2,7 @@ import cplex
 import numpy as np
 import gurobipy as gp
 from typing import List, Tuple, Dict
+import os # Make sure os is imported at the top of the file
 
 
 class MIPInstance:
@@ -20,7 +21,11 @@ class MIPInstance:
         # self.num_vars = 0
         # self.num_constraints = 0
         self.obj = []
-        self.sense_obj=-1
+        filename = os.path.basename(mps_path)
+        if filename.startswith("instance"):
+            self.sense_obj = 1
+        else:
+            self.sense_obj = -1
         self.A = None  # Constraint matrix
         self.b = []
         self.sense = []

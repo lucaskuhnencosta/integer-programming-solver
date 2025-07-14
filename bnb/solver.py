@@ -5,7 +5,7 @@ import numpy as np
 from bnb.active_path import ActivePathManager
 from bnb.node import Node
 from bnb.branching import Branching
-from bnb.shared_state import SharedState
+# from bnb.shared_state import SharedState
 from bnb.tree import BranchAndBoundTree
 
 from cutgen.Cliques import *
@@ -18,7 +18,7 @@ class BranchAndBoundSolver:
     def __init__(self, mip_instance,enable_plunging=False,k_plunging=10,enable_pump=False,n_pump=100,fp_max_it=1000,clique_cuts=False):
         self.instance = mip_instance
 
-        self.shared = SharedState()
+        # self.shared = SharedState()
 
         self.brancher = Branching(self.instance)
         self.gap_treshold = 1e-3 #%

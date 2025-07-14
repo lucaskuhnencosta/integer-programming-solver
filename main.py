@@ -17,6 +17,7 @@ from presolve.dual_fix import DualFix
 from bnb.solver import BranchAndBoundSolver
 
 
+
 # --- Pre-Solver function ---
 def run_presolve(instance: MIPInstance):
     """
@@ -36,25 +37,6 @@ def run_presolve(instance: MIPInstance):
 
 
 # --- Solver function ---
-def run_solver(instance: MIPInstance):
-    """
-    Initializes and runs the custom Branch-and-Bound solver on the given instance
-    """
-    #Configure your solver here as needed
-    solver = BranchAndBoundSolver(instance,
-                                  enable_plunging=True,
-                                  k_plunging=10,
-                                  enable_pump=True,
-                                  n_pump=2,
-                                  fp_max_it=20000,
-                                  clique_cuts=True
-    )
-
-    solution, obj_value = solver.solve()
-    return solution, obj_value
-
-
-# --- Other utilities ---
 
 def summarize_reductions(applied_reductions):
     """
@@ -97,30 +79,52 @@ def get_stats(instance: MIPInstance)->dict:
 def main():
     # 1. SET-UP
     #Path to the .mps file
-    instance_name="model_S1_Jc0_Js10_T96.mps"
-    instance_path = os.path.join("Laio_instances", instance_name)  # Adjust directory if needed
+    TEST_INSTANCE_FOLDER = "Test_instances"
+    parser = argparse.ArgumentParser(description="A custom MIP solver.")
+    parser.add_argument("instance_filename", type=str,
+                        help=f"Filename of the .mps instance in the '{TEST_INSTANCE_FOLDER}' folder.")
+    parser.add_argument("--no-presolve", action="store_true", help="Disable the presolve step.")
+    parser.add_argument("--no-cuts", action="store_true", help="Disable clique cuts.")  # ⬅️ ADD THIS
+    args = parser.parse_args()
+
+    # 3. Construct the full path from the folder and filename
+    full_path = os.path.join(TEST_INSTANCE_FOLDER, args.instance_filename)
 
     # 2. LOAD
-    print(f"📦 Loading instance: {instance_name}")
-    instance = MIPInstance(instance_path)
+    # All subsequent code now uses the `full_path` variable
+    print(f"📦 Loading instance: {full_path}")
+    if not os.path.exists(full_path):
+        print(f"❌ ERROR: File not found at '{full_path}'")
+        return
+    instance = MIPInstance(full_path)
     instance.pretty_print()
     stats_before = get_stats(instance)
 
     #3. PRESOLVE
-    print(f"Starting pre-solver...")
-    start_pre_solver_time=time.time()
-    applied_reductions = run_presolve(instance)
-    total_pre_solver_time=time.time()-start_pre_solver_time
-    stats_after=get_stats(instance)
-    print(f"Pre-solve complete in {total_pre_solver_time:.2f} seconds")
 
-    #4. REPORT
-    print_summary_comparison(stats_before, stats_after)
-    # summarize_reductions(applied_reductions)
-
+    if not args.no_presolve:
+        print("⚙️  Starting pre-solver...")
+        start_pre_solver_time = time.time()
+        applied_reductions = run_presolve(instance)
+        total_pre_solver_time = time.time() - start_pre_solver_time
+        stats_after = get_stats(instance)
+        print(f"Pre-solve complete in {total_pre_solver_time:.2f} seconds")
+        print_summary_comparison(stats_before, stats_after)
+        # summarize_reductions(applied_reductions)
+    else:
+        print("⏩ Skipping presolve step as requested.")
+    
     #5. SOLVE
     print("Solving with Branch-and-Bound (solver created by Lucas Kuhnen...)")
-    solution,obj_value=run_solver(instance)
+    solver = BranchAndBoundSolver(instance,
+                                  enable_plunging=True,
+                                  k_plunging=10,
+                                  enable_pump=True,
+                                  n_pump=2,
+                                  fp_max_it=20000,
+                                  clique_cuts=not args.no_cuts)  # ⬅️ PASS THE ARGUMENT HERE
+
+    solution, obj_value = solver.solve()
 
     # Print results
     if solution is None:
