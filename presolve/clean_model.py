@@ -29,11 +29,13 @@ class CleanModel(Presolver):
                 if s=='L':
                     if rhs>=0:
                         reductions.append(Reduction('remove_constraint', name,None))
+                        # print(f"Remove constraint comes from CleanModel empty row (0 <5) at {name}")
                     else:
                         raise Exception(f"Infeasible model. empty = constraint: 0 = {rhs} in {name}")
                 elif s=='E':
                     if abs(rhs)<=self.epsilon:
                         reductions.append(Reduction('remove_constraint', name,None))
+                        # print(f"Remove constraint comes from CleanModel empty row (0=0) at {name}")
                     else:
                         raise Exception(f"Infeasible model. empty = constraint: 0 = {rhs} in {name}")
                 i += 1
@@ -46,20 +48,25 @@ class CleanModel(Presolver):
                     if coeff > 0:
                         new_ub = rhs / coeff
                         reductions.append(Reduction('remove_constraint', name, None))
+                        # print(f"Remove constraint comes from CleanModel empty row, have a new upper bound for {vname} the coeff at {name}")
                         if new_ub < ub[j]:
                             reductions.append(Reduction('tighten_bound', vname, (lb[j], new_ub)))
+                            # print("And indeed we are correcting this bound")
                         elif new_ub < lb[j]:
                             raise Exception(f"Infeasible model. Constraint and bound of variable {vname} dont match")
                     elif coeff < 0:
                         new_lb = rhs / coeff
                         reductions.append(Reduction('remove_constraint', name, None))
+                        # print(f"Remove constraint comes from CleanModel empty row, have a new lower bound for {vname} the coeff at {name}")
                         if new_lb > lb[j]:
                             reductions.append(Reduction('tighten_bound', vname, (new_lb, ub[j])))
+                            # print("And indeed we are correcting this bound")
                         elif new_lb > ub[j]:
                             raise Exception(f"Infeasible model. Constraint and bound of variable {vname} dont match")
                 elif s=='E':
                     fixed_value = rhs / coeff
                     reductions.append(Reduction('remove_constraint', name, None))
+                    # print(f"remove constraint from clean_model because we fix equality at {name}")
 
                     if fixed_value < lb[j] or fixed_value > ub[j]:
                         raise Exception(f"Infeasible model. Equality requires {vname} = {fixed_value}, "
@@ -76,6 +83,7 @@ class CleanModel(Presolver):
             if s == 'L':
                 if rhs >= self.psi or activity_max <= rhs + self.epsilon:
                     reductions.append(Reduction('remove_constraint', name, None))
+                    # print("remove constraint from clean_model because it is unbounded")
                 elif activity_min >= rhs + self.epsilon:
                     raise Exception(f"Infeasible row detected: {name}")
             elif s == 'E':
@@ -83,6 +91,7 @@ class CleanModel(Presolver):
                     raise Exception(f"Infeasible equality: {name}")
                 elif abs(activity_min - rhs) <= self.epsilon and abs(activity_max - rhs) <= self.epsilon:
                     reductions.append(Reduction('remove_constraint', name, None))
+                    # print("remove constraint from clean_model because it is unbounded")
             i+=1
 
         # Fix variables where lb ≈ ub
@@ -100,6 +109,7 @@ class CleanModel(Presolver):
                 if abs(coef)<self.epsilon:
                     #print(f"f    removing unused variable {vname}")
                     reductions.append(Reduction('remove_variable', vname, None))
+                    # print("Remove variable comes from clean_model")
                 elif coef>0:
                     fix_val=lb[j]
                     #print(f"    Fixing objective-only variable {vname} = {fix_val} (obj>0)")
@@ -134,6 +144,7 @@ class CleanModel(Presolver):
                 if changed:
                     #print(f"    Adjusted bounds for integer variable {name}: [{orig_lb}, {orig_ub}] → [{int_lb}, {int_ub}]")
                     reductions.append(Reduction('tighten_bound', name, (lb[j], ub[j])))
+                    # print("We are calling bound tightening from clean_model")
 
 
         return reductions

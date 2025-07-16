@@ -16,25 +16,16 @@ class DualFix(Presolver):
         ub = instance.ub
         var_names=instance.var_names
         row_names=instance.row_names
-
         reductions = []
-
         for j in range(A.shape[1]):
             col=A[:,j]
             vname=var_names[j]
             obj_coef=c[j]
-
-            #Identify constraint types this variable appears in
             row_idxs=np.nonzero(col)[0]
             senses_involved=set(sense[i] for i in row_idxs)
-
-            #We want variables that appear ONLY in <= constraints
             if not senses_involved.issubset({'L'}):
                 continue
-
-            col_filtered=col[row_idxs] #Row indexes with Non zero coefficients only (At this point, all are <=)
-
-            #Case 1: All a_ij >=0 and obj coeff
+            col_filtered=col[row_idxs]
             if np.all(col_filtered>=0) and obj_coef>=0:
                 if lb[j]>-np.inf:
                     reductions.append(Reduction('fix variable',vname,lb[j]))
@@ -55,6 +46,4 @@ class DualFix(Presolver):
                     for i in row_idxs:
                         cname=row_names[i]
                         reductions.append(Reduction('remove_constraint', cname, None))
-
-        # print(f"    DualFix complete: {len(reductions)} reductions")
         return reductions

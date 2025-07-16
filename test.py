@@ -5,7 +5,7 @@ import sys
 # --- CONFIGURATION ---
 # The path to the .mps file you want to solve.
 # You can change this or pass it as a command-line argument.
-MPS_FILE_PATH = "Test_instances/model_S1_Jc0_Js12_T96.mps"
+MPS_FILE_PATH = "Test_instances/model_S1_Jc0_Js11_T96.mps"
 
 def solve_with_gurobi(file_path):
     """Reads and solves a MIP from an .mps file using Gurobi."""

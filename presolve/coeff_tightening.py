@@ -20,8 +20,8 @@ class CoefficientTightening(Presolver):
             row = A[i, :]
             row_sense = sense[i]
             row_rhs = rhs[i]
-            row_name = row_names[i]
-
+            if row_sense !='L':
+                continue
             activity_min = 0.0
             activity_max = 0.0
             for j in range(len(var_names)):
@@ -32,28 +32,22 @@ class CoefficientTightening(Presolver):
                 elif a_ij < 0:
                     activity_min += a_ij * ub[j]
                     activity_max += a_ij * lb[j]
-
             for j in np.nonzero(row)[0]:
                 a_ij = row[j]
+                if instance.var_types[j] not in ['I', 'B']:
+                    continue
                 xj = var_names[j]
                 old_aij = a_ij
-
-                # Try to shrink a_ij to a_ij' such that feasibility is preserved
-                if row_sense == 'L':
-                    if a_ij > 0 and ub[j] < 1e20:
-                        slack = row_rhs - activity_max - a_ij * (ub[j]-1)
-                        new_aij = min(a_ij, a_ij-slack)
-                    elif a_ij < 0 and lb[j] > -1e20:
-                        slack = row_rhs - activity_max - a_ij * (lb[j]+1)
-                        new_aij= max(a_ij, a_ij+slack)
-                    else:
-                        continue
+                if a_ij > 0 and ub[j] < 1e20:
+                    slack = row_rhs - activity_max - a_ij * (ub[j]-1)
+                    new_aij = min(a_ij, a_ij-slack)
+                elif a_ij < 0 and lb[j] > -1e20:
+                    slack = row_rhs - activity_max - a_ij * (lb[j]+1)
+                    new_aij= max(a_ij, a_ij+slack)
                 else:
                     continue
-
-                if abs(new_aij - a_ij) > 1e-8:
+                if abs(new_aij - a_ij) > 1e-6:
                     A[i, j] = new_aij
-                    reductions.append(Reduction('tighten_coefficient', (row_name, xj), (old_aij, new_aij)))
-
+                    reductions.append(Reduction('tighten_coefficient', (row_names[i], xj), (old_aij, new_aij)))
         return reductions
 

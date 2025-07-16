@@ -1,9 +1,9 @@
 import gurobipy as gp
 import os
 
-INPUT_FILE = "Test_instances/0020.mps"
-OUTPUT_DIR = "LP_models_of_original_instances"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "instance0020.lp")
+INPUT_FILE = "Test_instances/model_S1_Jc0_Js9_T96.mps"
+OUTPUT_DIR = "LP_models"
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "model_S1_Jc0_Js9_T96.lp")
 
 def convert_mps_to_lp(input_path, output_path):
     model = gp.read(input_path)

@@ -10,6 +10,8 @@ def clique_detection(A,b):
     """
     S=[]
     for constraint, RHS in zip(A,b):
+        if len(constraint)<2:
+            continue
         sorted_constraint=sorted(constraint,key=lambda x:x[1])
         if sorted_constraint[-1][1]+sorted_constraint[-2][1]>RHS:
             k=len(sorted_constraint)-1 #The index of the highest coefficient

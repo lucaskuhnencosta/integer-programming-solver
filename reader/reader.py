@@ -1,43 +1,32 @@
-import cplex
 import numpy as np
 import gurobipy as gp
+from gurobipy import GRB
 from typing import List, Tuple, Dict
-import os # Make sure os is imported at the top of the file
-
+import os
 
 class MIPInstance:
     def __init__(self, mps_path: str):
         self.mps_path = mps_path
-
-        self.obj_const=0
-        self.model = cplex.Cplex()
-        self.model.set_results_stream(None)
-        self.model.set_warning_stream(None)
-        self.model.set_error_stream(None)
-        self.model.set_log_stream(None)
-        self.model.read(mps_path)
-
-        # Attributes to be populated
-        # self.num_vars = 0
-        # self.num_constraints = 0
-        self.obj = []
+        env = gp.Env(empty=True)
+        env.setParam('OutputFlag', 0)
+        env.start()
+        self.model = gp.read(mps_path, env=env)
         filename = os.path.basename(mps_path)
         if filename.startswith("instance"):
             self.sense_obj = 1
         else:
             self.sense_obj = -1
-        self.A = None  # Constraint matrix
+        self.A = None
         self.b = []
         self.sense = []
         self.lb = []
         self.ub = []
         self.var_types = []
         self.var_names = []
-
+        self.obj = []
+        self.obj_const = 0
         self.root_lp_model=None
 
-
-        # Extract all necessary data
         self._extract_data()
 
     @property
@@ -62,166 +51,41 @@ class MIPInstance:
 
 
     def _extract_data(self):
+        self.model.update()
+
         ### Objective ###
-        self.obj = self.model.objective.get_linear()
-        # self.sense_obj = self.model.objective.get_sense()  # <-- ADD THIS
-        # print("\n" + "=" * 50)
-        # print(f"DEBUG: CPLEX read objective sense value as: {self.sense_obj}")
-        # print("(Note: 1 = Minimize, -1 = Maximize)")
-        # print("=" * 50 + "\n")
+        # if self.model.ModelSense == GRB.MAXIMIZE or self.sense_obj == -1:
+        #     print("[INFO] Maximization problem detected. Negating objective function.")
+        #     self.model.ModelSense = GRB.MINIMIZE
+        #     for v in self.model.getVars():
+        #         v.Obj = -v.Obj
+        #     self.obj_const = -self.model.ObjCon
+        #     self.model.setObjective(self.model.getObjective() + self.obj_const)
 
-        if self.sense_obj == -1:  # -1 signifies maximization
-            print("[INFO] Maximization problem detected. Negating objective function.")
-            self.obj = [-c for c in self.obj]
-            # Also negate the constant, if it ever exists from presolve
+        # Extract data from the (now guaranteed to be MINIMIZE) Gurobi model
+        variables = self.model.getVars()
+        self.var_names = [v.VarName for v in variables]
+        self.obj = np.array([v.Obj for v in variables])
+        self.lb = np.array([v.LB for v in variables])
+        self.ub = np.array([v.UB for v in variables])
+        self.var_types = [v.Vtype for v in variables]
+        constraints = self.model.getConstrs()
+        self.row_names = np.array([c.ConstrName for c in constraints])
+        self.b = np.array([c.RHS for c in constraints])
+        sense_map = {GRB.LESS_EQUAL: 'L', GRB.GREATER_EQUAL: 'G', GRB.EQUAL: 'E'}
+        self.sense = [sense_map[c.Sense] for c in constraints]
+        self.A = self.model.getA().toarray()
+
+        if self.sense_obj == -1:
+            self.obj = -self.obj
             self.obj_const = -self.obj_const
-            # Now, we can treat it as a minimization problem everywhere else
-            self.sense_obj = 1
-
-            ### Variables, their types, bounds, names, and number ###
-        self.var_types = self.model.variables.get_types()
-        self.lb = self.model.variables.get_lower_bounds()
-        self.ub = self.model.variables.get_upper_bounds()
-        self.var_names = self.model.variables.get_names()
-        self._clean_variable_names()
-
-
-        # Map CPLEX variable indices to our internal dense index
-        self.var_index_map = {name: idx for idx, name in enumerate(self.var_names)}
-        self.reverse_var_index = {v: k for k, v in self.var_index_map.items()}
-
-        num_sos = self.model.SOS.get_num()
-        if num_sos > 0:
-            print("\n" + "=" * 60)
-            print(f"⚠️  WARNING: This model contains {num_sos} Special Ordered Set (SOS) constraint(s).")
-            print("   This custom solver does not handle SOS constraints explicitly.")
-            print("   The solution may be incorrect as these constraints will be ignored.")
-            print("=" * 60 + "\n")
-        # --- End of new code ---
-
-        ### Constraints number###
-        # self.num_constraints = self.model.linear_constraints.get_num()
-        self.row_names = self.model.linear_constraints.get_names()
-        lin_expr = self.model.linear_constraints.get_rows()
-        self.A = self._build_constraint_matrix(lin_expr)
-        self.sense = self.model.linear_constraints.get_senses()
-        self.b = self.model.linear_constraints.get_rhs()
-
-
-
-
-
-    def _build_constraint_matrix(self, lin_expr: List[cplex.SparsePair]) -> np.ndarray:
-        A = np.zeros((self.num_constraints, self.num_vars))
-        var_names=self.var_names
-
-        for row_idx, row in enumerate(lin_expr):
-            for cplex_idx, coeff in zip(row.ind, row.val):
-                var_name=var_names[cplex_idx]
-                dense_idx=self.var_index_map[var_name]
-                A[row_idx][dense_idx] = coeff
-        return A
 
     def pretty_print(self):
         print(f'This model has originally {self.num_vars} variables and {self.num_constraints} constraints')
-        ##########################################################################
-        # print("\n=== Objective ===")
-        # print("Objective vector:", self.obj)
-
-        ###########################################################################
         print('\n=== Variables ===')
-
         print(f"Total binary variables: {self.num_binary}")
         print(f"Total integer variables: {self.num_integer}")
         print(f"Total continuous variables: {self.num_continuous}")
-
-        # print("Variable types:", self.var_types)
-        # print("Variable names:", self.var_names)
-        # print("Bounds:")
-        # for name, lb, ub in zip(self.var_names, self.lb, self.ub):
-        #     if abs(lb - ub) < 1e-8:
-        #         print(f"  {name}: FIXED to {lb}")
-        #     else:
-        #         lb_str = str(lb) if lb > -1e20 else "-∞"
-        #         ub_str = str(ub) if ub < 1e20 else "∞"
-        #         print(f"  {name}: [{lb_str}, {ub_str}]")
-        #
-        # print("Variable Types:")
-        # for name, vtype in zip(self.var_names, self.var_types):
-        #     typename = {"B": "binary", "I": "integer", "C": "continuous"}.get(vtype, vtype)
-        #     print(f"  {name}: {typename}")
-
-        # ###########################################################################
-        # print("\n=== Constraint Matrix (A) ===")
-        # print("And therefore the constraint matrix shape is:", self.A.shape)
-        # print("Here you can see your full constraint matrix:")
-        # print(self.A)
-        #
-        # print("\n=== RHS Vector (b) ===")
-        # print(np.array(self.b))
-        #
-        # print("\n=== Senses (L ≤, G ≥, E =) ===")
-        # print(self.sense)
-        #
-        # ###########################################################################
-        # print("\n So your full problem consists of:")
-        # terms = [f"{coef}*{name}" for coef, name in zip(self.obj, self.var_names) if coef != 0]
-        # print("minimize")
-        # print("  ", " + ".join(terms))
-        #
-        # print("\nsubject to")
-        # for i in range(self.num_constraints):
-        #     row_terms = []
-        #     for j in range(self.num_vars):
-        #         coeff = self.A[i, j]
-        #         if coeff != 0:
-        #             row_terms.append(f"{coeff}*{self.var_names[j]}")
-        #     expr = " + ".join(row_terms)
-        #     rhs = self.b[i]
-        #     sense = self.sense[i]
-        #     if sense == 'L':
-        #         print(f"  c{i + 1}: {expr} <= {rhs}")
-        #     elif sense == 'G':
-        #         print(f"  c{i + 1}: {expr} >= {rhs}")
-        #     elif sense == 'E':
-        #         print(f"  c{i + 1}: {expr} = {rhs}")
-
-
-    def rebuild_model(self):
-        import cplex
-
-        new_model = cplex.Cplex()
-        new_model.set_problem_type(cplex.Cplex.problem_type.LP)  # Or MIP if you use integer types
-
-        # Add variables
-        new_model.variables.add(
-            obj=self.obj,
-            lb=self.lb,
-            ub=self.ub,
-            types=self.var_types,
-            names=self.var_names
-        )
-
-        # Add constraints
-        rows = []
-        senses = []
-        rhs = []
-
-        for i in range(self.A.shape[0]):
-            coeffs = self.A[i, :]
-            indices = np.nonzero(coeffs)[0]
-            values = coeffs[indices].tolist()
-            rows.append([indices.tolist(), values])
-            senses.append(self.sense[i])
-            rhs.append(self.b[i])
-
-        new_model.linear_constraints.add(
-            lin_expr=rows,
-            senses=senses,
-            rhs=rhs
-        )
-
-        self.model = new_model  # Replace the old CPLEX model
 
     def _clean_variable_names(self):
         new_names = [name.replace("#", "_") for name in self.var_names]
@@ -230,61 +94,38 @@ class MIPInstance:
         self.var_names = new_names  # Update in our local copy
 
     def apply_substitution_expr(self, target_var: str, const_term: float, expr_terms: List[Tuple[float, str]]):
-        """
-        Apply substitution of `target_var` using: target_var = const_term + sum(coeff_i * var_i)
-        - const_term: constant term in the expression
-        - expr_terms: list of (coefficient, variable_name)
-        """
         if not hasattr(self, "obj_const"):
             self.obj_const = 0.0
-
         if target_var not in self.var_names:
             print(f"    [WARN] Cannot substitute: {target_var} not in model")
             return
-
-        # Index of target_var to eliminate
         idx_target = self.var_names.index(target_var)
         coeff_target = self.obj[idx_target]
-
-        # Update objective constant (obj += coeff_target * const_term)
         self.obj_const += coeff_target * const_term
-
-        # Update objective coefficients: obj[var_i] += coeff_target * coeff_i
         for coeff_i, var_i in expr_terms:
             if var_i in self.var_names:
                 idx_i = self.var_names.index(var_i)
                 self.obj[idx_i] += coeff_target * coeff_i
             else:
                 print(f"    [WARN] Substitution term {var_i} not found")
-
-        # Update constraint matrix: A[:, var_i] += coeff_i * A[:, target_var]
         col_target = self.A[:, idx_target].copy()
+        self.b-=col_target*const_term
         for coeff_i, var_i in expr_terms:
             if var_i in self.var_names:
                 idx_i = self.var_names.index(var_i)
                 self.A[:, idx_i] += coeff_i * col_target
-
-        # Remove column for target_var
         self.A = np.delete(self.A, idx_target, axis=1)
         self.obj = np.delete(self.obj, idx_target)
         self.lb = np.delete(self.lb, idx_target)
         self.ub = np.delete(self.ub, idx_target)
-
         del self.var_names[idx_target]
         del self.var_types[idx_target]
-
-        # print(f"    Substituted {target_var} → {const_term} + " +
-        #       " + ".join([f"{c}*{v}" for c, v in expr_terms]))
-
-
 
     def build_root_model(self):
         if self.root_lp_model is not None:
             print("[WARN] root_lp_model already exists. Overwriting.")
         model = gp.Model()
         model.Params.OutputFlag = 0
-
-        # Add variables
         x = []
         for j in range(self.num_vars):
             #vtype=self.var_types[j]
@@ -295,12 +136,8 @@ class MIPInstance:
             vartype = gp.GRB.CONTINUOUS  # default LP relaxation
             x.append(model.addVar(lb=lb, ub=ub, vtype=vartype, name=name))
         model.update()
-
-        #Set objective
         obj_expr=gp.quicksum(self.obj[j]*x[j] for j in range(self.num_vars))
         model.setObjective(obj_expr+self.obj_const, gp.GRB.MINIMIZE)
-
-        # Add constraints
         for i in range(self.num_constraints):
             lhs = gp.quicksum(self.A[i, j] * x[j] for j in range(self.num_vars) if self.A[i, j] != 0)
             sense = self.sense[i]
@@ -311,14 +148,10 @@ class MIPInstance:
                 model.addConstr(lhs >= rhs, name=self.row_names[i])
             elif sense == 'E':
                 model.addConstr(lhs == rhs, name=self.row_names[i])
-
         model.update()
         self.root_lp_model=model
 
     def is_integral(self, solution, tol=1e-6):
-        """
-        Check if a solution is integral on all integer or binary variables.
-        """
         for i, vtype in enumerate(self.var_types):
             if vtype in ['B', 'I']:  # Only check integer/binary vars
                 if abs(solution[i] - round(solution[i])) > tol:
@@ -436,6 +269,43 @@ class MIPInstance:
             print("    [WARNING] Verification failed. A non-positive coefficient was found.")
 
         return positive_binary_constraints, positive_binary_rhs
+
+        # In reader/reader.py, add this to the MIPInstance class
+
+        # In reader.py, inside the MIPInstance class
+
+    def build_gurobi_model(self):
+        """Builds and returns a Gurobi model from the current instance data."""
+        model = gp.Model()
+        # model.Params.OutputFlag = 0
+
+        # Add variables
+        vars = model.addVars(self.num_vars,
+                             lb=self.lb,
+                             ub=self.ub,
+                             vtype=self.var_types,
+                             name=self.var_names)
+
+        model.update()
+
+        # Add constraints
+        for i in range(self.num_constraints):
+            lhs = gp.quicksum(self.A[i, j] * vars[j] for j in range(self.num_vars) if self.A[i, j] != 0)
+            sense_char = self.sense[i]
+            sense = GRB.LESS_EQUAL if sense_char == 'L' else (GRB.GREATER_EQUAL if sense_char == 'G' else GRB.EQUAL)
+            model.addConstr(lhs, sense, self.b[i], name=self.row_names[i])
+
+        # Set objective
+        objective_expression = gp.quicksum(self.obj[j] * vars[j] for j in range(self.num_vars))
+        model.setObjective(objective_expression + self.obj_const, GRB.MINIMIZE)
+
+        return model
+
+    def write_model(self, output_path):
+        """Builds a Gurobi model and writes it to a file."""
+        print(f"  LOG: Writing current model state to {output_path}...")
+        model = self.build_gurobi_model()
+        model.write(output_path)
 
 
 

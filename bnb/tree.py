@@ -71,14 +71,20 @@ class BranchAndBoundTree:
         to ensure it is processed first (LIFO)
         """
         # Determine the order: better node is the one with the lower bound
-        if left_node.bound <= right_node.bound:
-            better_node, worse_node = left_node, right_node
+        if left_node.bound and right_node.bound:
+            if left_node.bound <= right_node.bound:
+                better_node, worse_node = left_node, right_node
+            else:
+                better_node, worse_node = right_node, left_node
+            if not worse_node.is_infeasible:
+                self.push(worse_node)
+            if not better_node.is_infeasible:
+                self.push(better_node)
         else:
-            better_node, worse_node = right_node, left_node
-
+            if not left_node.is_infeasible:
+                self.push(left_node)
+            if not right_node.is_infeasible:
+                self.push(right_node)
         # Push the worse node first, then the better node.
         # This way, the better node is at the top of the DFS stack.
-        if not worse_node.is_infeasible:
-            self.push(worse_node)
-        if not better_node.is_infeasible:
-            self.push(better_node)
+

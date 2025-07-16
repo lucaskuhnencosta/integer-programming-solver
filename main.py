@@ -85,6 +85,8 @@ def main():
                         help=f"Filename of the .mps instance in the '{TEST_INSTANCE_FOLDER}' folder.")
     parser.add_argument("--no-presolve", action="store_true", help="Disable the presolve step.")
     parser.add_argument("--no-cuts", action="store_true", help="Disable clique cuts.")  # ⬅️ ADD THIS
+    parser.add_argument("--strong-depth", type=int, default=10, help="Depth for strong branching.")
+    parser.add_argument("--strong-k", type=int, default=1500, help="Number of candidates for strong branching.")
     args = parser.parse_args()
 
     # 3. Construct the full path from the folder and filename
@@ -98,19 +100,18 @@ def main():
         return
     instance = MIPInstance(full_path)
     instance.pretty_print()
-    stats_before = get_stats(instance)
 
     #3. PRESOLVE
 
     if not args.no_presolve:
         print("⚙️  Starting pre-solver...")
+        stats_before = get_stats(instance)
         start_pre_solver_time = time.time()
-        applied_reductions = run_presolve(instance)
+        run_presolve(instance)
         total_pre_solver_time = time.time() - start_pre_solver_time
         stats_after = get_stats(instance)
         print(f"Pre-solve complete in {total_pre_solver_time:.2f} seconds")
         print_summary_comparison(stats_before, stats_after)
-        # summarize_reductions(applied_reductions)
     else:
         ModelCanonicalizer().apply(instance)
         print("⏩ Skipping presolve step as requested.")
@@ -120,12 +121,11 @@ def main():
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=True,
                                   k_plunging=10,
-                                  enable_pump=True,
-                                  n_pump=2,
-                                  fp_max_it=20000,
-                                  clique_cuts=not args.no_cuts)  # ⬅️ PASS THE ARGUMENT HERE
+                                  clique_cuts=not args.no_cuts,
+                                  strong_depth=args.strong_depth,
+                                  strong_k=args.strong_k)
 
-    solution, obj_value = solver.solve()
+    solution, obj_value, times, primal_bounds, dual_bounds = solver.solve()
 
     # Print results
     if solution is None:

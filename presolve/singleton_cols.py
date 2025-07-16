@@ -12,9 +12,7 @@ class ColSingletonRemover(Presolver):
         sense=instance.sense
         var_names=instance.var_names
         row_names=instance.row_names
-
         reductions = []
-
         for j in range(A.shape[1]):
             col = A[:, j]
             row_indices=np.flatnonzero(col)
@@ -22,21 +20,20 @@ class ColSingletonRemover(Presolver):
                 i=row_indices[0] #The only row this singleton variable appears in
                 if sense[i] != 'E':
                     continue
+                row = A[i, :]
+                if len(np.flatnonzero(row))!=2:
+                    continue
                 coeff_j=A[i,j]
                 rhs=b[i]
-                row=A[i,:]
-
+                x_to_sub = var_names[j]
                 terms=[]
                 for k in np.flatnonzero(row):
                     if k!=j:
                         coeff_k=A[i,k]
                         other_var=var_names[k]
                         terms.append((-coeff_k/coeff_j,other_var))
-
                 const_term=rhs/coeff_j
-                x=var_names[j]
-
-                reductions.append(Reduction(kind='substitute_variable',target=x,value=(const_term,terms)))
+                reductions.append(Reduction(kind='substitute_variable',target=x_to_sub,value=(const_term,terms)))
                 reductions.append(Reduction(kind='remove_constraint',target=row_names[i],value=None))
-
+                print("Remove constraint comes from Singleton Column ")
         return reductions
