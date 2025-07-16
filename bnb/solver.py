@@ -33,6 +33,7 @@ class BranchAndBoundSolver:
 
         ### Primal Heuristics ###
         self.enable_pump=True
+        self.n_pump_incumbent=20
         self.n_pump = 2
         self.fp_max_it=20000
         self.pump_model = None
@@ -69,7 +70,7 @@ class BranchAndBoundSolver:
         times=[]
         primal_bounds=[]
         dual_bounds=[]
-        TIMEOUT_SECONDS = 300
+        TIMEOUT_SECONDS = 1200
 
         ### Initializing cliques
 
@@ -229,6 +230,16 @@ class BranchAndBoundSolver:
                             incumbent_str = f"{incumbent:10.5f}"
                             print(f"FP FOUND NEW INCUMBENT: {self.best_obj:.5f}")
 
+                if incumbent and self.enable_pump and (node_counter%self.n_pump_incumbent==0):
+                    if node.solution is not None:
+                        fp_obj, fp_sol = self.feasibility_pump(node.solution, working_model)
+                        if fp_obj is not None and fp_obj<self.best_obj:
+                            self.best_obj = fp_obj
+                            self.best_sol = fp_sol
+                            incumbent = self.best_obj
+                            incumbent_str = f"{incumbent:10.5f}"
+                            print(f"FP FOUND NEW INCUMBENT: {self.best_obj:.5f}")
+
                 if self.enable_diving and (node_counter%self.n_diving==0):
                     if node.solution is not None:
                         dv_obj,dv_sol=self._diving_heuristic(node, working_model,active_mgr)
@@ -288,6 +299,7 @@ class BranchAndBoundSolver:
         finally:
             end_total_solver_time = time.time()
             elapsed_total_solver_time = end_total_solver_time - start_total_solver_time
+            print(f"Best solution:{self.best_obj:.5f}")
             print("Total solver time: {:.4f} seconds".format(elapsed_total_solver_time))
             print(f"Total number of nodes explored:{node_counter}")
 

@@ -1,1 +1,2 @@
 __pycache__/\n*.pyc\noutputs/\n.DS_Store\nvenv/\n.idea/
+.venv/
