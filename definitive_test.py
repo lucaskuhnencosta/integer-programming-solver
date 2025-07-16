@@ -51,7 +51,7 @@ def main():
                                           enable_plunging=True,
                                           k_plunging=10,
                                           clique_cuts=True,
-                                          strong_depth=50,
+                                          strong_depth=100,
                                           strong_k=20)
             obj_value, sol, times, primals, duals, nodes_explored, runtime = solver.solve()
             writer.writerow([instance_name, obj_value, runtime, nodes_explored])
