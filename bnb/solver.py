@@ -70,7 +70,7 @@ class BranchAndBoundSolver:
         times=[]
         primal_bounds=[]
         dual_bounds=[]
-        TIMEOUT_SECONDS = 1200
+        TIMEOUT_SECONDS = 600
 
         ### Initializing cliques
 
@@ -150,7 +150,7 @@ class BranchAndBoundSolver:
 
                 ########## CHECK IF WE HAVE TIME #########
 
-                if time.time() - start_total_solver_time > TIMEOUT_SECONDS:
+                if time.time() - start_tree_time > TIMEOUT_SECONDS:
                     print("\n⏰ Timeout limit reached. Terminating search.")
                     break  # Exit the loop gracefully
 
@@ -336,11 +336,9 @@ class BranchAndBoundSolver:
         for iteration in range(self.fp_max_it):
             try:
                 x_round = np.round(x_bar) # Simplified rounding
-
                 if self._check_lp_feasibility(x_round):
                     final_obj = np.dot(self.instance.obj, x_round)
                     return final_obj, x_round
-
                 if iteration > 0 and 'distance' in locals() and distance >= previous_distance:
                     stall_counter += 1
                     if stall_counter > 20:
@@ -353,15 +351,11 @@ class BranchAndBoundSolver:
                         if self.instance.var_types[j] == 'B': x_round[j] = 1 - x_round[j]
                 else:
                     stall_counter = 0
-
                 for j in self.pump_dist_constrs_le:
                     self.pump_dist_constrs_le[j].RHS = x_round[j]
                     self.pump_dist_constrs_ge[j].RHS = x_round[j]
-
                 self.pump_model.optimize()
-
                 if self.pump_model.Status != GRB.OPTIMAL: return None, None
-
                 distance = self.pump_model.ObjVal
                 previous_distance = distance
                 x_bar = np.array(list(self.pump_model.getAttr("X", self.pump_x_vars).values()))
@@ -369,14 +363,11 @@ class BranchAndBoundSolver:
                     if self._count_integer_infeasibilities(x_bar) == 0:
                         final_obj = np.dot(self.instance.obj, x_bar) #+self.instance.obj_const
                         return final_obj, x_bar
-
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 return None, None
-
         return None, None
-
 
 
     def _separate_clique_cuts(self,node,working_model):
@@ -435,61 +426,48 @@ class BranchAndBoundSolver:
             if not fractional_vars:
                 dive_obj = np.dot(self.instance.obj, current_solution) #+ self.instance.obj_const
                 return dive_obj,current_solution
-
             sr_sol = self._simple_rounding_heuristic(current_solution,fractional_vars)
             fractional_vars = [(j, sr_sol[j]) for j in self.I if abs(sr_sol[j] - round(sr_sol[j])) > 1e-6]
             if not fractional_vars:
                 dive_obj = np.dot(self.instance.obj, sr_sol)# + self.instance.obj_const
                 return dive_obj, sr_sol
-
             binary_fractional_vars_after_round = [(j, sr_sol[j]) for j in self.B if abs(sr_sol[j] - round(sr_sol[j])) > 1e-6]
-
             if not binary_fractional_vars_after_round:
                 fractional_vars_after_round = fractional_vars
             else:
                 fractional_vars_after_round = binary_fractional_vars_after_round
-
             best_dive_var = -1
             min_lock_score = float('inf')
             min_dist_to_int = float('inf')  # Tie-breaker: distance to nearest integer
             for var_idx, frac_value in fractional_vars_after_round:
                 down_lock=self.down_locks[var_idx]
                 up_lock=self.up_locks[var_idx]
-
                 current_score = min(down_lock, up_lock)
-
                 if current_score < min_lock_score:
                     min_lock_score = current_score
                     best_dive_var = var_idx
                     min_dist_to_int = min(frac_value - np.floor(frac_value), np.ceil(frac_value) - frac_value)
-
                 elif current_score==min_lock_score:
                     current_dist_to_int = min(frac_value - np.floor(frac_value), np.ceil(frac_value) - frac_value)
                     if current_dist_to_int < min_dist_to_int:
                         best_dive_var = var_idx
                         min_dist_to_int = current_dist_to_int
-
             if best_dive_var == -1:
                 best_dive_var = max(fractional_vars_after_round, key=lambda item: 0.5 - abs(item[1] - 0.5))[0]
-
             dive_down = self.down_locks[best_dive_var] <= self.up_locks[best_dive_var]
             val = current_solution[best_dive_var]
             bound_change = {}
             if dive_down:
-                # print(f"   [Dive Step {dive_step + 1}] Diving DOWN on var {best_dive_var} (value {val:.2f})")
                 bound_change = {best_dive_var: (self.instance.lb[best_dive_var], np.floor(val))}
             else:
-                # print(f"   [Dive Step {dive_step + 1}] Diving UP on var {best_dive_var} (value {val:.2f})")
                 bound_change = {best_dive_var: (np.ceil(val), self.instance.ub[best_dive_var])}
             dive_node = Node(parent=current_node, bound_changes=bound_change, depth=current_node.depth + 1)
             active_path.switch_focus(dive_node, working_model)
             dive_node.evaluate_lp(working_model, self.instance)
             if dive_node.is_infeasible:
                 break
-
             current_solution = dive_node.solution
             current_node = dive_node
-
         active_path.switch_focus(original_focus, working_model)
         return None, None
 
@@ -525,7 +503,6 @@ class BranchAndBoundSolver:
 
 
     def _count_integer_infeasibilities(self, sol, tol=1e-6):
-        """Counts how many integer/binary variables have fractional values."""
         if sol is None:
             return float('inf')
         return sum(1 for i, vtype in enumerate(self.instance.var_types)

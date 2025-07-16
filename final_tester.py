@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     INSTANCE_FOLDER = "Test_instances"
     instances_to_test = ["instance_0016.mps","instance_0027.mps"]
-    # instances_to_test=["instance_0012.mps","instance_0012.mps"]
+    # instances_to_test=["instance_0012.mps","instance_0016.mps"]
     solver_params = {
         'enable_plunging': True,
         'k_plunging': 10,

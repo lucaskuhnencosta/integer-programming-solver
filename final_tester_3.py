@@ -26,9 +26,10 @@ def run_and_get_history(instance_path, plunging_test):
 if __name__ == "__main__":
 
     INSTANCE_FOLDER = "Test_instances"
+    # instances_to_test=["instance_0016.mps","instance_0027.mps"]
     instances_to_test = ["instance_0018.mps","model_S1_Jc0_Js12_T96.mps"]
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
-    fig.suptitle('Effect of plunging vs Pure BFS', fontsize=16)
+    fig.suptitle('Effect of plunging vs Pure BFS', fontsize=20)
 
     for i, filename in enumerate(instances_to_test):
         ax=axes[i]
@@ -56,7 +57,7 @@ if __name__ == "__main__":
 
         # --- Save and Show ---
     plt.tight_layout(rect=[0, 0, 1, 0.96])  # Adjust layout to make room for suptitle
-    plot_filename = "convergence_comparison_3.png"
+    plot_filename = "convergence_comparison_33.png"
     plt.savefig(plot_filename)
 
     print(f"\n📈 Comparison plot saved to {plot_filename}")
