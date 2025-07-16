@@ -24,7 +24,7 @@ def run_and_get_history(instance_path, depth_test,strong_k_test):
 if __name__ == "__main__":
     # --- Configuration ---
     INSTANCE_FOLDER = "Test_instances"
-    INSTANCE_FILENAME = "model_S1_Jc0_Js9_T96.mps"
+    INSTANCE_FILENAME = "instance_0027.mps"
 
     # INSTANCE_FILENAME="instance_0012.mps"
 

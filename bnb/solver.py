@@ -35,7 +35,7 @@ class BranchAndBoundSolver:
         self.enable_pump=True
         self.n_pump_incumbent=20
         self.n_pump = 2
-        self.fp_max_it=20000
+        self.fp_max_it=10000
         self.pump_model = None
         self.pump_x_vars = None
         self.pump_d_vars = None
@@ -43,23 +43,19 @@ class BranchAndBoundSolver:
         self.pump_dist_constrs_ge = None
 
         self.enable_diving=True
-        self.n_diving=7
+        self.n_diving=15
 
-        ### Other primal heuristics parameters ###
-
-
+        ### Compute locks
         self._compute_locks()
-
         self.gap_treshold = 1e-3 #%
 
-
+        ## Initializations
         self.best_obj = float("inf")
         self.best_sol=None
-
         self.max_processed_depth=0
         self.plunge_steps_done=0
 
-
+        ## Number of variables
         self.I = [i for i, t in enumerate(self.instance.var_types) if t in ['B', 'I']]
         self.B = [i for i, t in enumerate(self.instance.var_types) if t in ['B']]
 
@@ -70,7 +66,7 @@ class BranchAndBoundSolver:
         times=[]
         primal_bounds=[]
         dual_bounds=[]
-        TIMEOUT_SECONDS = 300
+        TIMEOUT_SECONDS = 600
 
         ### Initializing cliques
 
@@ -125,8 +121,7 @@ class BranchAndBoundSolver:
 
         if branch_var is None:
             print("✅ Root node is optimal or infeasible after cuts.")
-            # ... handle this case ...
-            return root.solution, root.bound + self.instance.obj_const
+            return root.solution, root.bound, None, None, None, None, None
 
         tree.push_children(left_node, right_node)
 
@@ -150,7 +145,7 @@ class BranchAndBoundSolver:
 
                 ########## CHECK IF WE HAVE TIME #########
 
-                if time.time() - start_tree_time > TIMEOUT_SECONDS:
+                if time.time() - start_total_solver_time > TIMEOUT_SECONDS:
                     print("\n⏰ Timeout limit reached. Terminating search.")
                     break  # Exit the loop gracefully
 
@@ -172,7 +167,7 @@ class BranchAndBoundSolver:
                 node_counter += 1
                 active_mgr.switch_focus(node, working_model)
                 node.evaluate_lp(working_model,self.instance)
-                if self.enable_clique_cuts and node.depth % 5 ==0:
+                if self.enable_clique_cuts and node.depth % 50 ==0:
                     num_new_cuts = self._separate_clique_cuts(node, working_model)
                     if num_new_cuts > 0:
                         node.evaluate_lp(working_model, self.instance)
@@ -303,7 +298,7 @@ class BranchAndBoundSolver:
             print("Total solver time: {:.4f} seconds".format(elapsed_total_solver_time))
             print(f"Total number of nodes explored:{node_counter}")
 
-            return self.best_sol, self.best_obj, times, primal_bounds, dual_bounds
+            return self.best_sol, self.best_obj, times, primal_bounds, dual_bounds, elapsed_total_solver_time,node_counter
 
 
 
@@ -417,7 +412,7 @@ class BranchAndBoundSolver:
 
 
 
-    def _diving_heuristic(self, node, working_model, active_path, max_dive_depth=20000):
+    def _diving_heuristic(self, node, working_model, active_path, max_dive_depth=2000):
         original_focus = active_path.focus
         current_solution = node.solution
         current_node = node

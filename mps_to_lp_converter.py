@@ -1,7 +1,7 @@
 import gurobipy as gp
 import os
 
-INPUT_FILE = "Test_instances/model_S1_Jc0_Js9_T96.mps"
+INPUT_FILE = "Test_instances/amodel_S1_Jc0_Js9_T96.mps"
 OUTPUT_DIR = "LP_models"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "model_S1_Jc0_Js9_T96.lp")
 

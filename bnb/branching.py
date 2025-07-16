@@ -48,7 +48,7 @@ class Branching:
         else:
             original_fractional_vars = fractional_vars
         if not original_fractional_vars:
-            return None
+            return None, None, None
         if node.depth<=self.strong_depth:
             selected=self._select_k_strong_candidates(original_fractional_vars)
             return self.strong_branching(node,solution,selected,working_model,active_mgr)
