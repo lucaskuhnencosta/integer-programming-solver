@@ -70,7 +70,7 @@ class BranchAndBoundSolver:
         times=[]
         primal_bounds=[]
         dual_bounds=[]
-        TIMEOUT_SECONDS = 600
+        TIMEOUT_SECONDS = 300
 
         ### Initializing cliques
 

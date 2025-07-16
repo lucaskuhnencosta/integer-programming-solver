@@ -26,7 +26,7 @@ def run_and_get_history(instance_path, clique_cuts_test):
 if __name__ == "__main__":
 
     INSTANCE_FOLDER = "Test_instances"
-    instances_to_test = ["instance_0027.mps","instance_0016.mps"]
+    instances_to_test = ["instance_0027.mps","model_S1_Jc0_Js11_T96.mps"]
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     fig.suptitle('Effect of clique cuts', fontsize=20)
