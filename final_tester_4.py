@@ -8,6 +8,7 @@ from main import run_presolve
 def run_and_get_history(instance_path, depth_test,strong_k_test):
     print(f"\n--- Running: {os.path.basename(instance_path)} (Depth: {depth_test}) (Strong K: {strong_k_test}) ---")
     instance = MIPInstance(instance_path)
+    instance.pretty_print()
     run_presolve(instance)
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=True,
@@ -23,9 +24,9 @@ def run_and_get_history(instance_path, depth_test,strong_k_test):
 if __name__ == "__main__":
     # --- Configuration ---
     INSTANCE_FOLDER = "Test_instances"
-    # INSTANCE_FILENAME = "model_S1_Jc0_Js9_T96.mps"
+    INSTANCE_FILENAME = "model_S1_Jc0_Js9_T96.mps"
 
-    INSTANCE_FILENAME="instance_0012.mps"
+    # INSTANCE_FILENAME="instance_0012.mps"
 
     # Define the parameter grid for the experiment
     strong_depths = [10, 50, 100]

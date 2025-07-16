@@ -11,7 +11,7 @@ from presolve.ModelCanonicalizer import ModelCanonicalizer
 def run_and_get_history(instance_path, use_presolve, solver_params):
     print(f"\n--- Running: {os.path.basename(instance_path)} (Presolve: {use_presolve}) ---")
     instance = MIPInstance(instance_path)
-
+    instance.pretty_print()
     if use_presolve:
         print("⚙️  Running presolver...")
         run_presolve(instance)  # Assuming you have a presolve function

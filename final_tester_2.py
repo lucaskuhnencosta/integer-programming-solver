@@ -11,6 +11,7 @@ from presolve.ModelCanonicalizer import ModelCanonicalizer
 def run_and_get_history(instance_path, clique_cuts_test):
     print(f"\n--- Running: {os.path.basename(instance_path)} (Cliques: {clique_cuts_test}) ---")
     instance = MIPInstance(instance_path)
+    instance.pretty_print()
     run_presolve(instance)  # Assuming you have a presolve function
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=True,

@@ -11,6 +11,7 @@ from main import run_presolve  # Or however your presolve is called
 def run_and_get_history(instance_path, plunging_test):
     print(f"\n--- Running: {os.path.basename(instance_path)} (Plunging: {plunging_test}) ---")
     instance = MIPInstance(instance_path)
+    instance.pretty_print()
     run_presolve(instance)  # Assuming you have a presolve function
     solver = BranchAndBoundSolver(instance,
                                   enable_plunging=plunging_test,
