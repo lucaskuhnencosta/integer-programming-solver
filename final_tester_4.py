@@ -1,71 +1,66 @@
 import os
 import matplotlib.pyplot as plt
-import numpy as np
-
-# Import your solver components
 from reader.reader import MIPInstance
 from bnb.solver import BranchAndBoundSolver
-from main import run_presolve  # Or however your presolve is called
-from presolve.ModelCanonicalizer import ModelCanonicalizer
+from main import run_presolve
 
-def run_and_get_history(instance_path, use_presolve, solver_params):
-    print(f"\n--- Running: {os.path.basename(instance_path)} (Presolve: {use_presolve}) ---")
+
+def run_and_get_history(instance_path, depth_test,strong_k_test):
+    print(f"\n--- Running: {os.path.basename(instance_path)} (Depth: {depth_test}) (Strong K: {strong_k_test}) ---")
     instance = MIPInstance(instance_path)
-
-    if use_presolve:
-        print("⚙️  Running presolver...")
-        run_presolve(instance)  # Assuming you have a presolve function
-    else:
-        ModelCanonicalizer().apply(instance)
-
-    solver = BranchAndBoundSolver(instance, **solver_params)
+    run_presolve(instance)
+    solver = BranchAndBoundSolver(instance,
+                                  enable_plunging=True,
+                                  k_plunging=10,
+                                  clique_cuts=True,
+                                  strong_depth=depth_test,
+                                  strong_k=strong_k_test)
     solution, obj_value, times, primal_bounds, dual_bounds = solver.solve()
 
     return times, primal_bounds, dual_bounds
 
+
 if __name__ == "__main__":
-
+    # --- Configuration ---
     INSTANCE_FOLDER = "Test_instances"
-    instances_to_test = ["instance_0016.mps","model_S1_Jc0_Js11_T96.mps"]
-    solver_params = {
-        'enable_plunging': True,
-        'k_plunging': 10,
-        'clique_cuts': True,
-        'strong_depth': 10,
-        'strong_k': 1500
-    }
+    # INSTANCE_FILENAME = "model_S1_Jc0_Js9_T96.mps"
 
-    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
-    fig.suptitle('Effect of pre-solve', fontsize=16)
+    INSTANCE_FILENAME="instance_0012.mps"
 
-    for i, filename in enumerate(instances_to_test):
-        ax=axes[i]
-        instance_path=os.path.join(INSTANCE_FOLDER, filename)
+    # Define the parameter grid for the experiment
+    strong_depths = [10, 50, 100]
+    strong_ks = [20, 200, 2000]
+    linestyles = [':', '--', '-']  # Dotted, dashed, and solid lines for k values
 
-        t_pre, p_pre, d_pre = run_and_get_history(instance_path, True, solver_params)
+    # Create a 3x3 grid of subplots
+    # Correctly create 3 rows and 1 column
+    fig, axes = plt.subplots(len(strong_depths), 1, figsize=(12, 24), sharex=True)
+    fig.suptitle(f'Strong Branching Parameter Analysis for {INSTANCE_FILENAME}', fontsize=20)
 
-        # Run without Presolve
-        t_no_pre, p_no_pre, d_no_pre = run_and_get_history(instance_path, False, solver_params)
+    for i, depth in enumerate(strong_depths):
+        ax = axes[i]
+        ax.set_title(f"strong_depth = {depth}", fontsize=14)
+        instance_path = os.path.join(INSTANCE_FOLDER, INSTANCE_FILENAME)
 
-        # --- Plotting ---
-        # With Presolve
-        ax.step(t_pre, p_pre, where='post', label='Primal Bound (Presolve)', color='blue', linestyle='-')
-        ax.step(t_pre, d_pre, where='post', label='Dual Bound (Presolve)', color='red', linestyle='-')
+        for j, k_val in enumerate(strong_ks):
+            depth_test = depth
+            strong_k_test = k_val
 
-        # Without Presolve
-        ax.step(t_no_pre, p_no_pre, where='post', label='Primal Bound (No Presolve)',color='blue', linestyle='--')
-        ax.step(t_no_pre, d_no_pre, where='post', label='Dual Bound (No Presolve)', color='red', linestyle='--')
+            # Run the solver and get the history
+            times, primals, duals = run_and_get_history(instance_path, depth_test, strong_k_test)
 
-        ax.set_title(f"Instance: {filename}")
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Objective Value")
-        ax.grid(True, linestyle='--', alpha=0.6)
-        ax.legend()
 
-        # --- Save and Show ---
-    plt.tight_layout(rect=[0, 0, 1, 0.96])  # Adjust layout to make room for suptitle
-    plot_filename = "convergence_comparison.png"
+            if times:
+                style=linestyles[j]
+
+                ax.step(times, primals, where='post', label=f'Primal Bound (k={k_val})', linestyle=style, color='blue')
+                ax.step(times, duals, where='post', label=f'Dual Bound (k={k_val})',linestyle=style, color='red')
+
+            ax.set_ylabel("Objective Value")
+            ax.grid(True, linestyle='--', alpha=0.6)
+            ax.legend()
+
+    plt.tight_layout(rect=[0.1, 0.1, 1, 0.95])
+    plot_filename = f"strong_branching_grid_{INSTANCE_FILENAME.replace('.mps', '')}.png"
     plt.savefig(plot_filename)
-
-    print(f"\n📈 Comparison plot saved to {plot_filename}")
-    plt.show()
+    print(f"\n📈 Experiment complete. Grid plot saved to {plot_filename}")

@@ -26,13 +26,6 @@ if __name__ == "__main__":
 
     INSTANCE_FOLDER = "Test_instances"
     instances_to_test = ["instance_0016.mps","model_S1_Jc0_Js11_T96.mps"]
-    # solver_params = {
-    #     'enable_plunging': True,
-    #     'k_plunging': 10,
-    #     'clique_cuts': True,
-    #     'strong_depth': 10,
-    #     'strong_k': 1500
-    # }
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     fig.suptitle('Effect of clique cuts', fontsize=16)
@@ -48,12 +41,12 @@ if __name__ == "__main__":
 
         # --- Plotting ---
         # With Presolve
-        ax.step(t_pre, p_pre, where='post', label='Primal Bound (Presolve)', color='blue', linestyle='-')
-        ax.step(t_pre, d_pre, where='post', label='Dual Bound (Presolve)', color='red', linestyle='-')
+        ax.step(t_pre, p_pre, where='post', label='Primal Bound (Cliques)', color='blue', linestyle='-')
+        ax.step(t_pre, d_pre, where='post', label='Dual Bound (Cliques)', color='red', linestyle='-')
 
         # Without Presolve
-        ax.step(t_no_pre, p_no_pre, where='post', label='Primal Bound (No Presolve)',color='blue', linestyle='--')
-        ax.step(t_no_pre, d_no_pre, where='post', label='Dual Bound (No Presolve)', color='red', linestyle='--')
+        ax.step(t_no_pre, p_no_pre, where='post', label='Primal Bound (No Cliques)',color='blue', linestyle='--')
+        ax.step(t_no_pre, d_no_pre, where='post', label='Dual Bound (No Cliques)', color='red', linestyle='--')
 
         ax.set_title(f"Instance: {filename}")
         ax.set_xlabel("Time (s)")
