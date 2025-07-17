@@ -53,10 +53,10 @@ def main():
                                           clique_cuts=True,
                                           strong_depth=100,
                                           strong_k=20)
-            obj_value, sol, times, primals, duals, nodes_explored, runtime = solver.solve()
+            sol, obj_value, times, primals, duals, nodes_explored, runtime = solver.solve()
             writer.writerow([instance_name, obj_value, runtime, nodes_explored])
-            if times:
-                generate_plot(times, primals, duals, instance_name, PLOT_FOLDER)
+            # if times:
+            #     generate_plot(times, primals, duals, instance_name, PLOT_FOLDER)
 
     print("\n\n✅ All tests complete. Results saved to experiment_results.csv")
 
