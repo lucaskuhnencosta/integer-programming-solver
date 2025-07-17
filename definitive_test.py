@@ -50,7 +50,7 @@ def main():
             solver = BranchAndBoundSolver(instance,
                                           enable_plunging=True,
                                           k_plunging=10,
-                                          clique_cuts=True,
+                                          clique_cuts=False,
                                           strong_depth=100,
                                           strong_k=20)
             sol, obj_value, times, primals, duals, nodes_explored, runtime = solver.solve()
