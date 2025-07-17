@@ -167,10 +167,10 @@ class BranchAndBoundSolver:
                 node_counter += 1
                 active_mgr.switch_focus(node, working_model)
                 node.evaluate_lp(working_model,self.instance)
-                if self.enable_clique_cuts and node.depth % 50 ==0:
-                    num_new_cuts = self._separate_clique_cuts(node, working_model)
-                    if num_new_cuts > 0:
-                        node.evaluate_lp(working_model, self.instance)
+                # if self.enable_clique_cuts and node.depth % 50 ==0:
+                #     num_new_cuts = self._separate_clique_cuts(node, working_model)
+                #     if num_new_cuts > 0:
+                #         node.evaluate_lp(working_model, self.instance)
                 elapsed_time = time.time() - start_tree_time
 
                 ########## NODE PRUNNING #########

@@ -19,14 +19,14 @@ def run_and_get_history(instance_path, clique_cuts_test):
                                   clique_cuts=clique_cuts_test,
                                   strong_depth=10,
                                   strong_k=1500)
-    solution, obj_value, times, primal_bounds, dual_bounds = solver.solve()
+    solution, obj_value, times, primal_bounds, dual_bounds,_,_ = solver.solve()
 
     return times, primal_bounds, dual_bounds
 
 if __name__ == "__main__":
 
     INSTANCE_FOLDER = "Test_instances"
-    instances_to_test = ["instance_0027.mps","amodel_S1_Jc0_Js9_T96.mps"]
+    instances_to_test = ["instance_0012.mps","instance_0016.mps"]
 
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
     fig.suptitle('Effect of clique cuts', fontsize=20)
